@@ -28,9 +28,10 @@ if __name__ == '__main__':
     parser.add_argument(
         "--config_file", default="", help="path to config file", type=str
     )
-
+    # config_file 이 있다면 defaults configuration에 over ride
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,
                         nargs=argparse.REMAINDER)
+    # command line에서도 argument 받아서 over ride
     parser.add_argument("--local_rank", default=0, type=int)
     args = parser.parse_args()
 
@@ -48,7 +49,7 @@ if __name__ == '__main__':
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    logger = setup_logger("transreid", output_dir, if_train=True)
+    logger = setup_logger("transreid", output_dir, if_train=True) # Setting loger
     logger.info("Saving model in the path :{}".format(cfg.OUTPUT_DIR))
     logger.info(args)
 
@@ -56,13 +57,14 @@ if __name__ == '__main__':
         logger.info("Loaded configuration file {}".format(args.config_file))
         with open(args.config_file, 'r') as cf:
             config_str = "\n" + cf.read()
-            logger.info(config_str)
+            logger.info(config_str) # Config 파일을 한줄씩 읽어와서 Inform
     logger.info("Running with config:\n{}".format(cfg))
 
     if cfg.MODEL.DIST_TRAIN:
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
+    os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID # CUDA_VISIBLE device Setup
+
     train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
 
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)

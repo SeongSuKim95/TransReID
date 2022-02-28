@@ -1,6 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: '/home/xxx/.cache/torch/checkpoints/jx_vit_base_p16_224-80ecf9dd.pth'
+  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth'
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -25,7 +25,7 @@ INPUT:
 
 DATASETS:
   NAMES: ('market1501')
-  ROOT_DIR: ('../../data')
+  ROOT_DIR: ('/mnt/hdd_data/Dataset')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -54,6 +54,6 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
 
-OUTPUT_DIR: '../logs/market_vit_transreid'
+OUTPUT_DIR: './logs/market_vit_transreid'
 
 

@@ -29,10 +29,11 @@ class BaseDataset(object):
     """
 
     def get_imagedata_info(self, data):
+        #[('image_dir',pid,camid,1),...] = 
         pids, cams, tracks = [], [], []
 
-        for _, pid, camid, trackid in data:
-            pids += [pid]
+        for _, pid, camid, trackid in data:  # _=directory, pid=pid, camid=camid
+            pids += [pid] # pid를 list에 append
             cams += [camid]
             tracks += [trackid]
         pids = set(pids)
@@ -42,13 +43,13 @@ class BaseDataset(object):
         num_cams = len(cams)
         num_imgs = len(data)
         num_views = len(tracks)
-        return num_pids, num_imgs, num_cams, num_views
+        return num_pids, num_imgs, num_cams, num_views #  pid, cam , track의 개수
 
     def print_dataset_statistics(self):
         raise NotImplementedError
 
 
-class BaseImageDataset(BaseDataset):
+class BaseImageDataset(BaseDataset): # BaseDataset Inherit
     """
     Base class of image reid dataset
     """
@@ -70,8 +71,8 @@ class BaseImageDataset(BaseDataset):
 
 class ImageDataset(Dataset):
     def __init__(self, dataset, transform=None):
-        self.dataset = dataset
-        self.transform = transform
+        self.dataset = dataset # dataset list 
+        self.transform = transform # transform list
 
     def __len__(self):
         return len(self.dataset)

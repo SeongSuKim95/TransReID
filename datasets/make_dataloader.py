@@ -13,6 +13,7 @@ import torch.distributed as dist
 from .occ_duke import OCC_DukeMTMCreID
 from .vehicleid import VehicleID
 from .veri import VeRi
+
 __factory = {
     'market1501': Market1501,
     'dukemtmc': DukeMTMCreID,
@@ -20,7 +21,7 @@ __factory = {
     'occ_duke': OCC_DukeMTMCreID,
     'veri': VeRi,
     'VehicleID': VehicleID,
-}
+} # Class Factory
 
 def train_collate_fn(batch):
     """
@@ -40,7 +41,7 @@ def val_collate_fn(batch):
 
 def make_dataloader(cfg):
     train_transforms = T.Compose([
-            T.Resize(cfg.INPUT.SIZE_TRAIN, interpolation=3),
+            T.Resize(cfg.INPUT.SIZE_TRAIN, interpolation=3), # 1 = nearest, 2 = bilinear, 3 = bicubic
             T.RandomHorizontalFlip(p=cfg.INPUT.PROB),
             T.Pad(cfg.INPUT.PADDING),
             T.RandomCrop(cfg.INPUT.SIZE_TRAIN),
@@ -58,9 +59,28 @@ def make_dataloader(cfg):
 
     num_workers = cfg.DATALOADER.NUM_WORKERS
 
-    dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
+    dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR) # Make Dataset class with root directory
 
     train_set = ImageDataset(dataset.train, train_transforms)
+
+    # class ImageDataset(Dataset):
+    #     def __init__(self, dataset, transform=None):
+    #         self.dataset = dataset
+    #         self.transform = transform
+
+    #     def __len__(self):
+    #         return len(self.dataset)
+
+    #     def __getitem__(self, index):
+    #         img_path, pid, camid, trackid = self.dataset[index]
+    #         img = read_image(img_path)
+
+    #         if self.transform is not None:
+    #             img = self.transform(img)
+
+    #         return img, pid, camid, trackid,img_path.split('/')[-1]
+    
+
     train_set_normal = ImageDataset(dataset.train, val_transforms)
     num_classes = dataset.num_train_pids
     cam_num = dataset.num_train_cams
@@ -72,7 +92,7 @@ def make_dataloader(cfg):
             mini_batch_size = cfg.SOLVER.IMS_PER_BATCH // dist.get_world_size()
             data_sampler = RandomIdentitySampler_DDP(dataset.train, cfg.SOLVER.IMS_PER_BATCH, cfg.DATALOADER.NUM_INSTANCE)
             batch_sampler = torch.utils.data.sampler.BatchSampler(data_sampler, mini_batch_size, True)
-            train_loader = torch.utils.data.DataLoader(
+            train_loader = DataLoader(
                 train_set,
                 num_workers=num_workers,
                 batch_sampler=batch_sampler,
