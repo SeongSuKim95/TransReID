@@ -86,7 +86,6 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
 
     return all_cmc, mAP
 
-
 class R1_mAP_eval():
     def __init__(self, num_query, max_rank=50, feat_norm=True, reranking=False):
         super(R1_mAP_eval, self).__init__()
@@ -102,18 +101,18 @@ class R1_mAP_eval():
 
     def update(self, output):  # called once for each batch
         feat, pid, camid = output
-        self.feats.append(feat.cpu())
+        self.feats.append(feat.cpu()) #[batch_size, 768]
         self.pids.extend(np.asarray(pid))
         self.camids.extend(np.asarray(camid))
 
     def compute(self):  # called after each epoch
-        feats = torch.cat(self.feats, dim=0)
+        feats = torch.cat(self.feats, dim=0) # [num_batch, batch_size, feat_dim]
         if self.feat_norm:
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
-        # query
-        qf = feats[:self.num_query]
-        q_pids = np.asarray(self.pids[:self.num_query])
+        # feats.size() = [#query + #gallery, feat_dim]
+        qf = feats[:self.num_query] #self.num_query = 3368 
+        q_pids = np.asarray(self.pids[:self.num_query]) 
         q_camids = np.asarray(self.camids[:self.num_query])
         # gallery
         gf = feats[self.num_query:]

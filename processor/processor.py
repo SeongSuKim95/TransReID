@@ -30,14 +30,15 @@ def do_train(cfg,
     _LOCAL_PROCESS_GROUP = None
     if device:
         model.to(local_rank)
-        if torch.cuda.device_count() > 1 and cfg.MODEL.DIST_TRAIN:
+        if torch.cuda.device_count() > 1 and cfg.MODEL.DIST_TRAIN: # 여러개의 GPU를 동시에 사용할떄 
             print('Using {} GPUs for training'.format(torch.cuda.device_count()))
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
 
     loss_meter = AverageMeter()
-    acc_meter = AverageMeter()
+    acc_meter = AverageMeter() # Averaging acc, loss
 
-    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM)
+    evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM) # Evaluating R1, mAP
+
     scaler = amp.GradScaler()
     # train
     for epoch in range(1, epochs + 1):
@@ -46,16 +47,18 @@ def do_train(cfg,
         acc_meter.reset()
         evaluator.reset()
         scheduler.step(epoch)
-        model.train()
+        model.train() 
         for n_iter, (img, vid, target_cam, target_view) in enumerate(train_loader):
             optimizer.zero_grad()
-            optimizer_center.zero_grad()
+            optimizer_center.zero_grad() # center loss를 위한 optimizer
             img = img.to(device)
             target = vid.to(device)
             target_cam = target_cam.to(device)
             target_view = target_view.to(device)
             with amp.autocast(enabled=True):
-                score, feat = model(img, target, cam_label=target_cam, view_label=target_view )
+                score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
+                # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
+                # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
                 loss = loss_fn(score, feat, target, target_cam)
 
             scaler.scale(loss).backward()
@@ -68,6 +71,7 @@ def do_train(cfg,
                     param.grad.data *= (1. / cfg.SOLVER.CENTER_LOSS_WEIGHT)
                 scaler.step(optimizer_center)
                 scaler.update()
+                # center loss의 parameter에 대해서도 update
             if isinstance(score, list):
                 acc = (score[0].max(1)[1] == target).float().mean()
             else:
@@ -76,14 +80,14 @@ def do_train(cfg,
             loss_meter.update(loss.item(), img.shape[0])
             acc_meter.update(acc, 1)
 
-            torch.cuda.synchronize()
+            torch.cuda.synchronize() # cuda의 work group 내의 모든 wavefront속 kernel이 전부 연산을 마칠때까지 기다려줌 
             if (n_iter + 1) % log_period == 0:
                 logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
                             .format(epoch, (n_iter + 1), len(train_loader),
                                     loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
 
-        end_time = time.time()
-        time_per_batch = (end_time - start_time) / (n_iter + 1)
+        end_time = time.time() #Epoch마다 걸리는 시간 측정      
+        time_per_batch = (end_time - start_time) / (n_iter + 1) # Batch수로 나누어주어 batch마다 걸리는 시간 측정
         if cfg.MODEL.DIST_TRAIN:
             pass
         else:
@@ -94,7 +98,7 @@ def do_train(cfg,
             if cfg.MODEL.DIST_TRAIN:
                 if dist.get_rank() == 0:
                     torch.save(model.state_dict(),
-                               os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}.pth'.format(epoch)))
+                           os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}.pth'.format(epoch)))
             else:
                 torch.save(model.state_dict(),
                            os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}.pth'.format(epoch)))
@@ -156,13 +160,13 @@ def do_inference(cfg,
 
     for n_iter, (img, pid, camid, camids, target_view, imgpath) in enumerate(val_loader):
         with torch.no_grad():
-            img = img.to(device)
-            camids = camids.to(device)
+            img = img.to(device) # [256, 3, 256, 256] (Batch 256)
+            camids = camids.to(device) # [256]
             target_view = target_view.to(device)
-            feat = model(img, cam_label=camids, view_label=target_view)
+            feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
-
+    # feats : [76, 256, 768]
     cmc, mAP, _, _, _, _, _ = evaluator.compute()
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))

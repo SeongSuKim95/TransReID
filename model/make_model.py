@@ -118,8 +118,8 @@ class Backbone(nn.Module):
         print('Loading pretrained model for finetuning from {}'.format(model_path))
 
 
-class build_transformer(nn.Module):
-    def __init__(self, num_classes, camera_num, view_num, cfg, factory):
+class build_transformer(nn.Module): # nn.Module 상속
+    def __init__(self, num_classes, camera_num, view_num, cfg, factory):  # factory : __factory_T_type
         super(build_transformer, self).__init__()
         last_stride = cfg.MODEL.LAST_STRIDE
         model_path = cfg.MODEL.PRETRAIN_PATH
@@ -141,6 +141,7 @@ class build_transformer(nn.Module):
         else:
             view_num = 0
 
+        # backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
         self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, sie_xishu=cfg.MODEL.SIE_COE,
                                                         camera=camera_num, view=view_num, stride_size=cfg.MODEL.STRIDE_SIZE, drop_path_rate=cfg.MODEL.DROP_PATH,
                                                         drop_rate= cfg.MODEL.DROP_OUT,
@@ -150,11 +151,13 @@ class build_transformer(nn.Module):
         if pretrain_choice == 'imagenet':
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
-
+        # Base model 이외에 필요한 layer? : gap, classifier, bnneck layer
         self.gap = nn.AdaptiveAvgPool2d(1)
 
         self.num_classes = num_classes
         self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
+        # Loss_type : arcface, cosface, amsoftmax, circleloss 등의 metric_learning은 classifier의 weight를 통해서 구현됨
+        # nn.Module을 상속받는 class로 구현
         if self.ID_LOSS_TYPE == 'arcface':
             print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
             self.classifier = Arcface(self.in_planes, self.num_classes,
@@ -175,23 +178,24 @@ class build_transformer(nn.Module):
             self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
             self.classifier.apply(weights_init_classifier)
 
-        self.bottleneck = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck = nn.BatchNorm1d(self.in_planes) #bottle neck layer는 BN
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
 
     def forward(self, x, label=None, cam_label= None, view_label=None):
         global_feat = self.base(x, cam_label=cam_label, view_label=view_label)
 
-        feat = self.bottleneck(global_feat)
+        feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
 
         if self.training:
             if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                cls_score = self.classifier(feat, label)
+                cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
             else:
                 cls_score = self.classifier(feat)
-
+            # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
+            # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
             return cls_score, global_feat  # global feature for triplet loss
-        else:
+        else: # evaluation일때는 feature만 사용 (feature의 bnneck 통과여부는 선택 가능)
             if self.neck_feat == 'after':
                 # print("Test with feature after BN")
                 return feat

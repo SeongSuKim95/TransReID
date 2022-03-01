@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 
-class CenterLoss(nn.Module):
+class CenterLoss(nn.Module): 
     """Center loss.
 
     Reference:

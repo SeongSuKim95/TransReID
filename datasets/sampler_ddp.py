@@ -112,6 +112,8 @@ class RandomIdentitySampler_DDP(Sampler):
     """
     Randomly sample N identities, then for each identity,
     randomly sample K instances, therefore batch size is N*K.
+    N개의 ID 각각에 대해 K개의 sample로 batch 구성
+    
     Args:
     - data_source (list): list of (img_path, pid, camid).
     - num_instances (int): number of instances per identity in a batch.
@@ -121,9 +123,9 @@ class RandomIdentitySampler_DDP(Sampler):
     def __init__(self, data_source, batch_size, num_instances):
         self.data_source = data_source
         self.batch_size = batch_size
-        self.world_size = dist.get_world_size()
+        self.world_size = dist.get_world_size() # for ddp
         self.num_instances = num_instances
-        self.mini_batch_size = self.batch_size // self.world_size
+        self.mini_batch_size = self.batch_size // self.world_size # for ddp
         self.num_pids_per_batch = self.mini_batch_size // self.num_instances
         self.index_dic = defaultdict(list)
 

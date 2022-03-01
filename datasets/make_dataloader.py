@@ -61,7 +61,7 @@ def make_dataloader(cfg):
 
     dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR) # Make Dataset class with root directory
 
-    train_set = ImageDataset(dataset.train, train_transforms)
+    train_set = ImageDataset(dataset.train, train_transforms) # ImageDataset class : DataLoader에 들어갈 instance 생성자 __len__, _getitem__ method 
 
     # class ImageDataset(Dataset):
     #     def __init__(self, dataset, transform=None):
@@ -100,11 +100,12 @@ def make_dataloader(cfg):
                 pin_memory=True,
             )
         else:
-            train_loader = DataLoader(
+            train_loader = DataLoader( 
                 train_set, batch_size=cfg.SOLVER.IMS_PER_BATCH,
                 sampler=RandomIdentitySampler(dataset.train, cfg.SOLVER.IMS_PER_BATCH, cfg.DATALOADER.NUM_INSTANCE),
                 num_workers=num_workers, collate_fn=train_collate_fn
             )
+            # sampler : iterable 객체 
     elif cfg.DATALOADER.SAMPLER == 'softmax':
         print('using softmax sampler')
         train_loader = DataLoader(

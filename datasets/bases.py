@@ -69,7 +69,7 @@ class BaseImageDataset(BaseDataset): # BaseDataset Inherit
         print("  ----------------------------------------")
 
 
-class ImageDataset(Dataset):
+class ImageDataset(Dataset): # ImageDataset class : DataLoader에 들어갈 instance 생성자 __len__, _getitem__ method 
     def __init__(self, dataset, transform=None):
         self.dataset = dataset # dataset list 
         self.transform = transform # transform list
@@ -82,6 +82,5 @@ class ImageDataset(Dataset):
         img = read_image(img_path)
 
         if self.transform is not None:
-            img = self.transform(img)
-
-        return img, pid, camid, trackid,img_path.split('/')[-1]
+             img = self.transform(img)
+        return img, pid, camid, trackid,img_path.split('/')[-1]  # img, pid, camid, trackid, img_name
