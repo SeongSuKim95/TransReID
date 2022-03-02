@@ -111,24 +111,23 @@ class R1_mAP_eval():
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
         # feats.size() = [#query + #gallery, feat_dim]
-        qf = feats[:self.num_query] #self.num_query = 3368 
-        q_pids = np.asarray(self.pids[:self.num_query]) 
-        q_camids = np.asarray(self.camids[:self.num_query])
-        # gallery
-        gf = feats[self.num_query:]
-        g_pids = np.asarray(self.pids[self.num_query:])
-
-        g_camids = np.asarray(self.camids[self.num_query:])
+        # self.num_query = 3368
+        qf = feats[:self.num_query] # query_feature
+        q_pids = np.asarray(self.pids[:self.num_query]) # query pid 
+        q_camids = np.asarray(self.camids[:self.num_query]) # query cam id 
+        # gallery -> self.num_query to end  
+        gf = feats[self.num_query:] # gallery feature
+        g_pids = np.asarray(self.pids[self.num_query:]) # gallery pid
+        g_camids = np.asarray(self.camids[self.num_query:]) # gallery cam id
         if self.reranking:
             print('=> Enter reranking')
             # distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
             distmat = re_ranking(qf, gf, k1=50, k2=15, lambda_value=0.3)
-
         else:
             print('=> Computing DistMat with euclidean_distance')
-            distmat = euclidean_distance(qf, gf)
-        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids)
-
+            distmat = euclidean_distance(qf, gf) # qf.size() = [3368,768], , gf.size() = [15913,768]
+        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids) 
+        # dist_mat.size() = [3368,15913], len(q_pids) = 3368, len(g_pids) = 15913, len(q_camids) = 3368, len(g_camids) = 15913
         return cmc, mAP, distmat, self.pids, self.camids, qf, gf
 
 
