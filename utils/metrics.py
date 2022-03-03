@@ -35,8 +35,8 @@ def eval_func(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50):
     #         4 1 2 3
     if num_g < max_rank:
         max_rank = num_g
-        print("Note: number of gallery samples is quite small, got {}".format(num_g))
-    indices = np.argsort(distmat, axis=1)
+        print("Note: number of gallery samples is quite small, got {}".format(num_g)) # gallery가 rank 수보다 작을 경우
+    indices = np.argsort(distmat, axis=1) 
     #  0 2 1 3
     #  1 2 3 0
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
