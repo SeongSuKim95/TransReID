@@ -167,11 +167,11 @@ def do_inference(cfg,
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
     # feats : [76, 256, 768]
-    cmc, mAP, _, _, _, _, _ = evaluator.compute()
+    cmc, mAP, _, _, _, _, _ = evaluator.compute() # cmc[i] = Rank i score
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
-    return cmc[0], cmc[4]
+    return cmc[0], cmc[4] # Rank 1, Rank 5
 
 
