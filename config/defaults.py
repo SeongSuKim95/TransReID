@@ -182,6 +182,8 @@ _C.TEST.FEAT_NORM = 'yes'
 _C.TEST.DIST_MAT = "dist_mat.npy"
 # Whether calculate the eval score option: 'True', 'False'
 _C.TEST.EVAL = False
+_C.TEST.VISUALIZE = False
+_C.TEST.VISUALIZE_INDEX = 0
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #

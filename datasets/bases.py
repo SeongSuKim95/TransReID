@@ -73,7 +73,6 @@ class ImageDataset(Dataset): # ImageDataset class : DataLoader에 들어갈 inst
     def __init__(self, dataset, transform=None):
         self.dataset = dataset # dataset list 
         self.transform = transform # transform list
-
     def __len__(self):
         return len(self.dataset)
 
@@ -83,4 +82,4 @@ class ImageDataset(Dataset): # ImageDataset class : DataLoader에 들어갈 inst
 
         if self.transform is not None:
              img = self.transform(img)
-        return img, pid, camid, trackid,img_path.split('/')[-1]  # img, pid, camid, trackid, img_name
+        return img, pid, camid, trackid, img_path.split('/')[-1]  # img, pid, camid, trackid, img_name

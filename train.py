@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID # CUDA_VISIBLE device Setup
 
-    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
+    train_loader, train_loader_normal, query_loader, galleryt_loader, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
     
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
 

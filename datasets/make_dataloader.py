@@ -60,9 +60,8 @@ def make_dataloader(cfg):
     num_workers = cfg.DATALOADER.NUM_WORKERS
 
     dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR) # Make Dataset class with root directory
-
+    
     train_set = ImageDataset(dataset.train, train_transforms) # ImageDataset class : DataLoader에 들어갈 instance 생성자 __len__, _getitem__ method 
-
     # class ImageDataset(Dataset):
     #     def __init__(self, dataset, transform=None):
     #         self.dataset = dataset
@@ -115,14 +114,33 @@ def make_dataloader(cfg):
     else:
         print('unsupported sampler! expected softmax or triplet but got {}'.format(cfg.SAMPLER))
 
-    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms)
+    query_set = ImageDataset(dataset.query,val_transforms)
+    gallery_set = ImageDataset(dataset.gallery, val_transforms)
 
+    val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms)
+    # len(val_set) = 3368 + 15913 
+    
+    query_loader = DataLoader(
+        query_set, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
+        collate_fn=val_collate_fn
+    )
+    query_dir = dataset.query_dir
+
+    gallery_loader = DataLoader(
+        gallery_set, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
+        collate_fn=val_collate_fn
+    )
+    gallery_dir = dataset.gallery_dir
+
+    # validation loader는 query와 gallery 가 순서대로 합쳐진 채로 들어옴
     val_loader = DataLoader(
         val_set, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
         collate_fn=val_collate_fn
     )
+
     train_loader_normal = DataLoader(
         train_set_normal, batch_size=cfg.TEST.IMS_PER_BATCH, shuffle=False, num_workers=num_workers,
         collate_fn=val_collate_fn
     )
-    return train_loader, train_loader_normal, val_loader, len(dataset.query), num_classes, cam_num, view_num
+    
+    return train_loader, train_loader_normal, val_loader, len(dataset.query), num_classes, cam_num, view_num, query_loader, gallery_loader

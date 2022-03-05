@@ -71,14 +71,14 @@ class Market1501(BaseImageDataset): # BaseImageDataset inherit
             pid, _ = map(int, pattern.search(img_path).groups()) # 두 패턴 ([-\d+]),(\d)를 int로 mapping후 반환
             # img_path = '/mnt/hdd_data/Dataset/market1501/bounding_box_train/0002_c1s1_000451_03.jpg'
             # pid = 2, _ = 1
-            if pid == -1: continue  # junk images are just ignored
+            if pid == -1: continue  # junk images are just ignored, gallery 이 ID가 -1인 image들은 제외
             pid_container.add(pid)
         pid2label = {pid: label for label, pid in enumerate(pid_container)}  # 751 개의 pid에 numbering
         dataset = []
         for img_path in sorted(img_paths):
             pid, camid = map(int, pattern.search(img_path).groups())
             if pid == -1: continue  # junk images are just ignored
-            assert 0 <= pid <= 1501  # pid == 0 means background
+            assert 0 <= pid <= 1501  # pid 0번의 경우 background(또는 신체의 일부)만 나온 data들인데 test시에만 포함되어있다
             assert 1 <= camid <= 6
             camid -= 1  # index starts from 0
             if relabel: pid = pid2label[pid]

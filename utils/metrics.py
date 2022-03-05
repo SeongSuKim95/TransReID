@@ -3,6 +3,8 @@ import numpy as np
 import os
 from utils.reranking import re_ranking
 
+def demo(qf,gf):
+    return
 
 def euclidean_distance(qf, gf):
     m = qf.shape[0]
@@ -128,7 +130,7 @@ class R1_mAP_eval():
         if self.feat_norm:
             print("The test feature is normalized")
             feats = torch.nn.functional.normalize(feats, dim=1, p=2)  # along channel
-        # feats.size() = [#query + #gallery, feat_dim]
+        # feats.size() = [#query + #gallery, feat_dim] : Val_loader에서 함께 들어왔으므로!
         # self.num_query = 3368
         qf = feats[:self.num_query] # query_feature
         q_pids = np.asarray(self.pids[:self.num_query]) # query pid 
@@ -146,7 +148,7 @@ class R1_mAP_eval():
             distmat = euclidean_distance(qf, gf) # qf.size() = [3368,768], , gf.size() = [15913,768]
         cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids) 
         # dist_mat.size() = [3368,15913], len(q_pids) = 3368, len(g_pids) = 15913, len(q_camids) = 3368, len(g_camids) = 15913
-        return cmc, mAP, distmat, self.pids, self.camids, qf, gf
+        return cmc, mAP, distmat, self.pids, self.camids, qf, gf, q_pids, g_pids, q_camids, g_camids
 
 
 
