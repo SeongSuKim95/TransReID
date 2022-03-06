@@ -51,6 +51,7 @@ TEST:
   FEAT_NORM: 'yes'
   VISUALIZE : True
   VISUALIZE_INDEX : 777
+  EXPLAIN : True
 OUTPUT_DIR: './logs/market_vit_base'
 
 
