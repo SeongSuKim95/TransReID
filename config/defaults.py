@@ -184,6 +184,8 @@ _C.TEST.DIST_MAT = "dist_mat.npy"
 _C.TEST.EVAL = False
 _C.TEST.VISUALIZE = False
 _C.TEST.VISUALIZE_INDEX = 0
+_C.TEST.HEAD_FUSION = 'max'
+_C.TEST.DISCARD_RATIO = 0.9
 _C.TEST.EXPLAIN = False
 # ---------------------------------------------------------------------------- #
 # Misc options

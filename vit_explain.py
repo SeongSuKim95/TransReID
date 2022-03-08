@@ -43,7 +43,7 @@ def get_args():
                         Can be mean/max/min')
     parser.add_argument('--discard_ratio', type=float, default=0.9,
                         help='How many of the lowest 14x14 attention paths should we discard')
-    parser.add_argument('--category_index', type=int, default=1,
+    parser.add_argument('--category_index', type=int, default= None,
                         help='The category index for gradient rollout')
     parser.add_argument("--config_file", default="", help="path to config file", type=str)
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,

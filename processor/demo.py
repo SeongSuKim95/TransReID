@@ -69,30 +69,50 @@ gallery_feature = gallery_feature.cuda()
 # sort the images
 def sort_img(qf, ql, qc, gf, gl, gc):
     query = qf.view(-1,1)
+    # query.view(-1,1) --> torch.size([768,1])
     # print(query.shape)
-    score = torch.mm(gf,query)
-    score = score.squeeze(1).cpu()
-    score = score.numpy()
+    score = torch.mm(gf,query) # gf.size([15913,768]), query.size([768,1]) --> matrix multiplication [15913,1]
+    # 각 gallery feature와 query feature간 내적 (similairity)
+    score = score.squeeze(1).cpu() # feature similarity size : gallery size
+    score = score.numpy() 
     # predict index
-    index = np.argsort(score)  #from small to large
-    index = index[::-1]
+    index = np.argsort(score)[::-1] #sort by index from large to small
+    score = np.sort(score)[::-1]
     # index = index[0:2000]
     # good index
-    query_index = np.argwhere(gl==ql)
+    query_index = np.argwhere(gl==ql) # query label과 gallery index가 같은 index
     #same camera
-    camera_index = np.argwhere(gc==qc)
+    camera_index = np.argwhere(gc==qc) # query cam과 gallery cam이 같은 index
 
     #good_index = np.setdiff1d(query_index, camera_index, assume_unique=True)
-    junk_index1 = np.argwhere(gl==-1)
-    junk_index2 = np.intersect1d(query_index, camera_index)
+    junk_index1 = np.argwhere(gl==-1) # gallery id가 -1인 건 제외
+    junk_index2 = np.intersect1d(query_index, camera_index) # np.intersect1d : 교집합, 즉 pid와 cid가 같은 gallery
     junk_index = np.append(junk_index2, junk_index1) 
 
-    mask = np.in1d(index, junk_index, invert=True)
+    mask = np.in1d(index, junk_index, invert=True) # 1차원 배열의 각 요소가 두번째 배열에도 있는지 확인
     index = index[mask]
-    return index
+    score = score[mask]
+    # test = np.array([0, 1, 2, 5, 0])
+    # states = [0, 2]
+    # mask = np.in1d(test, states)
+    # mask
+    # array([ True, False,  True, False,  True])
+    # test[mask]
+    # array([0, 2, 0])
+    # mask = np.in1d(test, states, invert=True)
+    # mask
+    # array([False,  True, False,  True, False])
+    # test[mask]
+    # array([1, 5])
+    
+    # 즉, junk index를 제외한 index를 return 하겠다는 것
+
+    return index,score
 
 i = args.query_index
-index = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feature,gallery_label,gallery_cam)
+index,score = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feature,gallery_label,gallery_cam)
+# query_feature[i].size() = 768
+# gallery_feature.size() = [15913,768]
 
 ########################################################################
 # Visualize the rank result
@@ -103,20 +123,28 @@ print(query_path)
 print('Top 10 images are as follow:')
 try: # Visualize Ranking Result 
     # Graphical User Interface is needed
-    fig = plt.figure(figsize=(16,4))
-    ax = plt.subplot(1,11,1)
+    fig = plt.figure(figsize=(16,4)) #단위 인치
+    ax = plt.subplot(1,11,1) # row, col, index
     ax.axis('off')
-    imshow(query_path,'query')
+    imshow(query_path,'Query')
+    ax.text(10,140,f"ID : {query_label}")
     for i in range(10):
         ax = plt.subplot(1,11,i+2)
-        ax.axis('off')
-        img_path = gallery_loader.dataset.dataset[index[i]][0]
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        img_path = gallery_loader.dataset.dataset[index[i]][0] 
         label = gallery_label[index[i]]
+        similarity_score = score[i]
         imshow(img_path)
+        
         if label == query_label:
             ax.set_title('%d'%(i+1), color='green')
         else:
             ax.set_title('%d'%(i+1), color='red')
+        ax.set
+        ax.text(10,140,f"ID : {label}",) 
+        ax.text(0,152,"Score : {:.3f}".format(similarity_score))
         print(img_path)
 except RuntimeError:
     for i in range(10):

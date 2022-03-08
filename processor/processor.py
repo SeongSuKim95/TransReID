@@ -9,6 +9,7 @@ from utils.meter import AverageMeter
 from utils.metrics import R1_mAP_eval, demo
 from torch.cuda import amp
 import torch.distributed as dist
+from vit_rollout import VITAttentionRollout
 
 def do_train(cfg,
              model,
@@ -167,11 +168,17 @@ def do_inference(cfg,
             img = img.to(device) # [256, 3, 256, 256] (Batch 256)
             camids = camids.to(device) # [256]
             target_view = target_view.to(device)
-            feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            if cfg.TEST.VISUALIZE :
+                attention_rollout =  VITAttentionRollout(model,head_fusion=cfg.TEST.HEAD_FUSION, discard_ratio=cfg.TEST.DISCARD_RATIO)
+                feat, mask = attention_rollout(img)
+                print("d")
+            else :
+                feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
     # feats : [76, 256, 768]
-    cmc, mAP, _, _, _, qf, gf, q_pids, g_pids, q_camids, g_camids = evaluator.compute() # cmc[i] = Rank i score
+    cmc, mAP, distmat, pids_all, camids_all, qf, gf, q_pids, g_pids, q_camids, g_camids = evaluator.compute() # cmc[i] = Rank i score
+    # distmat : (num_query,num_gallery) compared by euclidean distance
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:
@@ -179,6 +186,7 @@ def do_inference(cfg,
     if cfg.TEST.VISUALIZE :
         result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids} # type(label) ,type(cam) = list , type(feature)= torch.tensor
         scipy.io.savemat('pytorch_result.mat',result)
+
         os.system(f'python -m processor.demo --config_file={args.config_file} --query_index={cfg.TEST.VISUALIZE_INDEX}')
 
     return cmc[0], cmc[4] # Rank 1, Rank 5

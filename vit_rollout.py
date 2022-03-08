@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as f
 from PIL import Image
 import numpy
 import sys
@@ -8,6 +9,7 @@ import cv2
 
 def rollout(attentions, discard_ratio, head_fusion):
     result = torch.eye(attentions[0].size(-1))
+    # Test batch : 
     # attentions.size() = [12,1,3,197,197]
     with torch.no_grad():
         for attention in attentions:
@@ -24,26 +26,29 @@ def rollout(attentions, discard_ratio, head_fusion):
 
             # Drop the lowest attentions, but
             # don't drop the class token
-            flat = attention_heads_fused.view(attention_heads_fused.size(0), -1)
+            flat = attention_heads_fused.view(attention_heads_fused.size(0), -1) # [Batch_size, (patch*patch+1)^2]
             _, indices = flat.topk(int(flat.size(-1)*discard_ratio), -1, False) # indices : 1 dim
-            indices = indices[indices != 0]
-            flat[0, indices] = 0
+            indices = indices[indices != 0].reshape((flat.size(0),-1))
+            flat[:, indices] = 0
 
             I = torch.eye(attention_heads_fused.size(-1)) # 197
             a = (attention_heads_fused + 1.0*I)/2
-            a = a / a.sum(dim=-1) # a.sum(dim=-1).size() = [1,197] --> a의 행별 summation으로 normalize
+            a = f.normalize(a,p=1,dim=2) # a.sum(dim=-1).size() = [1,197] --> a의 행별 summation으로 normalize
 
             result = torch.matmul(a, result) # (197,197) * (197,197), result 는 맨처음에 eye matrix, matrix multiplication 
-    
+            
     # Look at the total attention between the class token,
     # and the image patches
-    # result.size() = (1,197,197)
-    mask = result[0, 0 , 1 :] # mask size = 196, except cls token
+    # result.size() = (batch_size,197,197)
+    mask = result[:, 0 , 1 :] # mask size = (batch_size,num_patch), except cls token
+    # mask = result[0,0,1:]
     # In case of 224x224 image, this brings us from 196 to 14
     width = int(mask.size(-1)**0.5) # 196 ** (1/2) = 14
-    mask = mask.reshape(width, width).numpy()
-    mask = mask / np.max(mask)
-    return mask    # (14,14)
+    mask = mask.reshape(result.size(0),width, width).numpy()
+    mask = mask / np.max(mask,axis=(1,2))[:,np.newaxis,np.newaxis]
+    
+    # mask = mask/ np.max(mask)
+    return mask    # (batch_size,patch,patch)
 
 class VITAttentionRollout:
     def __init__(self, model, attention_layer_name='attn_drop', head_fusion="mean",
@@ -60,6 +65,7 @@ class VITAttentionRollout:
         self.attentions = []
 
     def get_attention(self, module, input, output):
+        # output.size() = torch.size([batch,12,257,257])
         self.attentions.append(output.cpu())
 
     def __call__(self, input_tensor):
@@ -69,7 +75,7 @@ class VITAttentionRollout:
             # self.attentions list에 attention map들이 append 됨
         # print(len(self.attentions)) == 12
         # 이 map들을 가지고 roll out함수 수행
-        return rollout(self.attentions, self.discard_ratio, self.head_fusion)
+        return output, rollout(self.attentions, self.discard_ratio, self.head_fusion)
 
 # attention_rollout = VITAttentionRollout(model, head_fusion=args.head_fusion, 
 # discard_ratio=args.discard_ratio)

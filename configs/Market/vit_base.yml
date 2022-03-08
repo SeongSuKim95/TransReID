@@ -49,6 +49,9 @@ TEST:
   WEIGHT: '../logs/0321_market_vit_base/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
+  VISUALIZE : True
+  VISUALIZE_INDEX : 777
+  EXPLAIN : True
 
 OUTPUT_DIR: '../logs/0321_market_vit_base'
 
