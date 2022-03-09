@@ -144,7 +144,9 @@ def do_inference(cfg,
                  model,
                  val_loader,
                  num_query,
-                 args
+                 args,
+                 q_dir,
+                 g_dir,
                  ):
     device = "cuda"
     logger = logging.getLogger("transreid.test")
@@ -162,18 +164,22 @@ def do_inference(cfg,
 
     model.eval()
     img_path_list = []
-
     for n_iter, (img, pid, camid, camids, target_view, imgpath) in enumerate(val_loader):
+        print(n_iter)
         with torch.no_grad():
             img = img.to(device) # [256, 3, 256, 256] (Batch 256)
             camids = camids.to(device) # [256]
             target_view = target_view.to(device)
-            if cfg.TEST.VISUALIZE :
-                attention_rollout =  VITAttentionRollout(model,head_fusion=cfg.TEST.HEAD_FUSION, discard_ratio=cfg.TEST.DISCARD_RATIO)
-                feat, mask = attention_rollout(img)
-                print("d")
-            else :
-                feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            # if cfg.TEST.VISUALIZE :
+            #     attention_rollout =  VITAttentionRollout(model,head_fusion=cfg.TEST.HEAD_FUSION, discard_ratio=cfg.TEST.DISCARD_RATIO)
+            #     feat, mask = attention_rollout(img)
+            #     if not n_iter :
+            #         mask_list = mask
+            #     else :
+            #         mask_list = np.concatenate((mask_list,mask))
+            # else :
+            #    feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
     # feats : [76, 256, 768]
@@ -184,7 +190,9 @@ def do_inference(cfg,
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
     if cfg.TEST.VISUALIZE :
-        result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids} # type(label) ,type(cam) = list , type(feature)= torch.tensor
+        query_path_list = img_path_list[:len(q_pids)]
+        gallery_path_list = img_path_list[len(q_pids):]
+        result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir} # type(label) ,type(cam) = list , type(feature)= torch.tensor
         scipy.io.savemat('pytorch_result.mat',result)
 
         os.system(f'python -m processor.demo --config_file={args.config_file} --query_index={cfg.TEST.VISUALIZE_INDEX}')

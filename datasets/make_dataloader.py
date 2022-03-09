@@ -143,4 +143,4 @@ def make_dataloader(cfg):
         collate_fn=val_collate_fn
     )
     
-    return train_loader, train_loader_normal, val_loader, len(dataset.query), num_classes, cam_num, view_num, query_loader, gallery_loader
+    return train_loader, train_loader_normal, val_loader, len(dataset.query), num_classes, cam_num, view_num, query_loader, gallery_loader , query_dir, gallery_dir

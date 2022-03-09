@@ -30,7 +30,7 @@ os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
 # data_dir = opts.test_dir
 # image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ) for x in ['gallery','query']}
-_, _, _, _, _, _, _, query_loader, gallery_loader = make_dataloader(cfg)
+_, _, _, _, _, _, _, query_loader, gallery_loader,q_dir,g_dir = make_dataloader(cfg)
 
 #####################################################################
 #Show result
@@ -47,11 +47,16 @@ result = scipy.io.loadmat('pytorch_result.mat')
 query_feature = torch.FloatTensor(result['query_f'])
 query_cam = result['query_cam'][0]
 query_label = result['query_label'][0]
-#query_root = result['query_root'][0]
+q_root = result['q_dir'][0]
+query_path_list = result['img_path'][:query_label.size]
+
 gallery_feature = torch.FloatTensor(result['gallery_f'])
 gallery_cam = result['gallery_cam'][0]
 gallery_label = result['gallery_label'][0]
-#gallery_root = result['query_root'][0]
+g_root = result['g_dir'][0]
+gallery_path_list = result['img_path'][query_label.size:]
+
+# img_path = result['img_path']
 
 # multi = os.path.isfile('multi_query.mat')
 
@@ -117,7 +122,7 @@ index,score = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feat
 ########################################################################
 # Visualize the rank result
 
-query_path = query_loader.dataset.dataset[i][0]
+query_path = q_root +'/'+ query_path_list[i]
 query_label = query_label[i]
 print(query_path)
 print('Top 10 images are as follow:')
@@ -134,6 +139,7 @@ try: # Visualize Ranking Result
         ax.get_yaxis().set_visible(False)
 
         img_path = gallery_loader.dataset.dataset[index[i]][0] 
+        img_path_test = g_root + '/' + gallery_path_list[index[i]]
         label = gallery_label[index[i]]
         similarity_score = score[i]
         imshow(img_path)
