@@ -192,3 +192,6 @@ _C.TEST.EXPLAIN = False
 # ---------------------------------------------------------------------------- #
 # Path to checkpoint and saved log of trained model
 _C.OUTPUT_DIR = ""
+
+# Model INDEX
+_C.INDEX = None

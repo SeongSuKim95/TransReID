@@ -10,12 +10,41 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from datasets import make_dataloader
 from utils.logger import setup_logger
+import cv2
+from .vit_rollout import VITAttentionRollout
+from torchvision import transforms as T
+from PIL import Image
+from model import make_model
+
+from datasets.occ_duke import OCC_DukeMTMCreID
+from datasets.dukemtmcreid import DukeMTMCreID
+from datasets.market1501 import Market1501
+from datasets.msmt17 import MSMT17
+from datasets.veri import VeRi
+from datasets.vehicleid import VehicleID
+
+__factory = {
+    'market1501': Market1501,
+    'dukemtmc': DukeMTMCreID,
+    'msmt17': MSMT17,
+    'occ_duke': OCC_DukeMTMCreID,
+    'veri': VeRi,
+    'VehicleID': VehicleID,
+} # Class Factory
+
+def show_mask_on_image(img, mask):
+    img = np.float32(img) / 255
+    heatmap = cv2.applyColorMap(np.uint8(255 * mask), cv2.COLORMAP_JET)
+    heatmap = np.float32(heatmap) / 255
+    cam = heatmap + np.float32(img)
+    cam = cam / np.max(cam)
+    return np.uint8(255 * cam)
 
 #######################################################################
 # Evaluate
 parser = argparse.ArgumentParser(description='Demo')
 parser.add_argument("--config_file", default="", help="path to config file", type=str)
-parser.add_argument('--query_index', default=777, type=int, help='test_image_index')
+parser.add_argument('--use_cuda', action='store_true', default=False,help='Use NVIDIA GPU acceleration')
 # parser.add_argument('--test_dir',default='/mnt/hdd_data/Dataset/market1501',type=str, help='./test_data')
 parser.add_argument("opts", help="Modify config options using the command-line", default=None,
                         nargs=argparse.REMAINDER)
@@ -26,12 +55,20 @@ if args.config_file != "":
 cfg.merge_from_list(args.opts)
 cfg.freeze()
 
+transform = T.Compose([
+    T.Resize(cfg.INPUT.SIZE_TEST),
+    T.ToTensor(),
+    T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
+])
+
 os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
 
+dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
+model = make_model(cfg, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
+model.load_param(cfg.TEST.WEIGHT)
+model.eval()
 # data_dir = opts.test_dir
 # image_datasets = {x: datasets.ImageFolder( os.path.join(data_dir,x) ) for x in ['gallery','query']}
-_, _, _, _, _, _, _, query_loader, gallery_loader,q_dir,g_dir = make_dataloader(cfg)
-
 #####################################################################
 #Show result
 def imshow(path, title=None):
@@ -42,6 +79,9 @@ def imshow(path, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
+def axis_off(ax):
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)  
 ######################################################################
 result = scipy.io.loadmat('pytorch_result.mat')
 query_feature = torch.FloatTensor(result['query_f'])
@@ -114,7 +154,29 @@ def sort_img(qf, ql, qc, gf, gl, gc):
 
     return index,score
 
-i = args.query_index
+def Attention_map(img_path):
+    img = Image.open(img_path)
+    img_input = img.resize(cfg.INPUT.SIZE_TEST)
+    input_tensor = transform(img_input).unsqueeze(0)
+    if args.use_cuda:
+        input_tensor = input_tensor.cuda()
+    attention_rollout = VITAttentionRollout(model, head_fusion=cfg.TEST.HEAD_FUSION, 
+    discard_ratio=cfg.TEST.DISCARD_RATIO)
+    mask = attention_rollout(input_tensor)
+    # name = "attention_rollout_{:.3f}_{}.png".format(args.discard_ratio, args.head_fusion)
+
+    np_img = np.array(img)[:, :, ::-1]
+    mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
+    mask = show_mask_on_image(np_img, mask)
+    # cv2.imshow("Input Image", np_img)
+    # cv2.imshow(name, mask)
+    # cv2.imwrite("input.png", np_img)
+    
+    mask = cv2.cvtColor(mask,cv2.COLOR_BGR2RGB) # If we use plt.show() in further process
+
+    return mask
+    # cv2.imwrite("./result/"+sname, mask)
+i = cfg.TEST.VISUALIZE_INDEX
 index,score = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feature,gallery_label,gallery_cam)
 # query_feature[i].size() = 768
 # gallery_feature.size() = [15913,768]
@@ -122,24 +184,27 @@ index,score = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feat
 ########################################################################
 # Visualize the rank result
 
-query_path = q_root +'/'+ query_path_list[i]
+query_path = (q_root +'/'+ query_path_list[i]).rstrip()
 query_label = query_label[i]
 print(query_path)
 print('Top 10 images are as follow:')
 try: # Visualize Ranking Result 
     # Graphical User Interface is needed
-    fig = plt.figure(figsize=(16,4)) #단위 인치
-    ax = plt.subplot(1,11,1) # row, col, index
-    ax.axis('off')
+    fig = plt.figure(figsize=(16,8)) #단위 인치
+    ax = plt.subplot(2,11,1) # row, col, index
+    axis_off(ax)
     imshow(query_path,'Query')
     ax.text(10,140,f"ID : {query_label}")
+    mask = Attention_map(query_path)
+    attn_ax = plt.subplot(2,11,12)
+    axis_off(attn_ax)
+    plt.imshow(mask)
+    plt.title('Query')
     for i in range(10):
-        ax = plt.subplot(1,11,i+2)
+        ax = plt.subplot(2,11,i+2)
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
-
-        img_path = gallery_loader.dataset.dataset[index[i]][0] 
-        img_path_test = g_root + '/' + gallery_path_list[index[i]]
+        img_path = (g_root + '/' + gallery_path_list[index[i]]).rstrip()
         label = gallery_label[index[i]]
         similarity_score = score[i]
         imshow(img_path)
@@ -148,14 +213,21 @@ try: # Visualize Ranking Result
             ax.set_title('%d'%(i+1), color='green')
         else:
             ax.set_title('%d'%(i+1), color='red')
-        ax.set
+
         ax.text(10,140,f"ID : {label}",) 
         ax.text(0,152,"Score : {:.3f}".format(similarity_score))
+        
+        ax = plt.subplot(2,11,i+12+1)
+        axis_off(ax)
+        mask = Attention_map(img_path)
+        plt.imshow(mask)
         print(img_path)
+    plt.subplots_adjust(hspace=0.01)
+    
 except RuntimeError:
     for i in range(10):
-        img_path = gallery_loader.dataset.dataset[index[i]][0]
-        print(img_path[0])
+        img_path = (g_root + '/' + gallery_path_list[index[i]]).rstrip()
+        print(img_path)
     print('If you want to see the visualization of the ranking result, graphical user interface is needed.')
 
 fig.savefig("show.png")

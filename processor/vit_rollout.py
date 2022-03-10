@@ -117,7 +117,7 @@ class VITAttentionRollout:
             # self.attentions list에 attention map들이 append 됨
         # print(len(self.attentions)) == 12
         # 이 map들을 가지고 roll out함수 수행
-        return output, rollout(self.attentions, self.discard_ratio, self.head_fusion)
+        return rollout(self.attentions, self.discard_ratio, self.head_fusion)
 
 # attention_rollout = VITAttentionRollout(model, head_fusion=args.head_fusion, 
 # discard_ratio=args.discard_ratio)

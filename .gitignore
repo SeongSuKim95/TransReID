@@ -184,7 +184,7 @@ coverage.xml
 *.mo
 *.pot
 *.mat
-
+*.png
 # Django stuff:
 *.log
 local_settings.py

@@ -5,11 +5,12 @@ import torch
 import torch.nn as nn
 import numpy as np
 import scipy.io
+import shutil
 from utils.meter import AverageMeter
 from utils.metrics import R1_mAP_eval, demo
 from torch.cuda import amp
 import torch.distributed as dist
-from vit_rollout import VITAttentionRollout
+from .vit_rollout import VITAttentionRollout
 
 def do_train(cfg,
              model,
@@ -189,14 +190,13 @@ def do_inference(cfg,
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+    result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir,'Euclidean_dist':distmat} # type(label) ,type(cam) = list , type(feature)= torch.tensor
+    path = f'result/result_matrix'
+    os.makedirs(path,exist_ok=True)
+    scipy.io.savemat(f'{path}/{cfg.INDEX}.mat',result)
+    
     if cfg.TEST.VISUALIZE :
-        query_path_list = img_path_list[:len(q_pids)]
-        gallery_path_list = img_path_list[len(q_pids):]
-        result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir} # type(label) ,type(cam) = list , type(feature)= torch.tensor
-        scipy.io.savemat('pytorch_result.mat',result)
-
-        os.system(f'python -m processor.demo --config_file={args.config_file} --query_index={cfg.TEST.VISUALIZE_INDEX}')
-
+        os.system(f'python -m processor.demo --config_file={args.config_file}')
     return cmc[0], cmc[4] # Rank 1, Rank 5
 
 
