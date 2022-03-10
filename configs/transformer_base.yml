@@ -50,10 +50,13 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : True
+  VISUALIZE_ID : 200
   VISUALIZE_INDEX : 300
+  VISUALIZE_METRIC : 'Euclidean'
   HEAD_FUSION : 'mean'
   DISCARD_RATIO : 0.9
   EXPLAIN : False
+  
 OUTPUT_DIR: './logs/market_vit_base'
 INDEX: 1
 

@@ -184,14 +184,14 @@ def do_inference(cfg,
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
     # feats : [76, 256, 768]
-    cmc, mAP, distmat, pids_all, camids_all, qf, gf, q_pids, g_pids, q_camids, g_camids = evaluator.compute() # cmc[i] = Rank i score
+    cmc, mAP, distmat_eucd, distmat_cos, pids_all, camids_all, qf, gf, q_pids, g_pids, q_camids, g_camids = evaluator.compute() # cmc[i] = Rank i score
     # distmat : (num_query,num_gallery) compared by euclidean distance
     logger.info("Validation Results ")
     logger.info("mAP: {:.1%}".format(mAP))
     for r in [1, 5, 10]:
         logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
-    result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir,'Euclidean_dist':distmat} # type(label) ,type(cam) = list , type(feature)= torch.tensor
-    path = f'result/result_matrix'
+    result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir,'Euclidean_dist':distmat_eucd, 'Cos_dist':distmat_cos} # type(label) ,type(cam) = list , type(feature)= torch.tensor
+    path = 'result/result_matrix'
     os.makedirs(path,exist_ok=True)
     scipy.io.savemat(f'{path}/{cfg.INDEX}.mat',result)
     

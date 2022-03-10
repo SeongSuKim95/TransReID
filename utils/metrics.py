@@ -145,10 +145,11 @@ class R1_mAP_eval():
             distmat = re_ranking(qf, gf, k1=50, k2=15, lambda_value=0.3)
         else:
             print('=> Computing DistMat with euclidean_distance')
-            distmat = euclidean_distance(qf, gf) # qf.size() = [3368,768], , gf.size() = [15913,768]
-        cmc, mAP = eval_func(distmat, q_pids, g_pids, q_camids, g_camids) 
+            distmat_eucd = euclidean_distance(qf, gf) # qf.size() = [3368,768], , gf.size() = [15913,768]
+            distmat_cos = cosine_similarity(qf, gf)
+        cmc, mAP = eval_func(distmat_cos, q_pids, g_pids, q_camids, g_camids) 
         # dist_mat.size() = [3368,15913], len(q_pids) = 3368, len(g_pids) = 15913, len(q_camids) = 3368, len(g_camids) = 15913
-        return cmc, mAP, distmat, self.pids, self.camids, qf, gf, q_pids, g_pids, q_camids, g_camids
+        return cmc, mAP, distmat_eucd, distmat_cos, self.pids, self.camids, qf, gf, q_pids, g_pids, q_camids, g_camids
 
 
 
