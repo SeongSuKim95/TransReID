@@ -387,3 +387,61 @@ except RuntimeError:
 result_img_path = f'result/result_visualize/{cfg.INDEX}'
 os.makedirs(result_img_path,exist_ok=True)
 fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_INDEX}_{cfg.TEST.VISUALIZE_METRIC}.png")
+
+
+try: # Visualize Ranking Result 
+    # Graphical User Interface is needed
+    fig = plt.figure(figsize=(16,32)) #단위 인치
+    fig.suptitle(f'TEST_SIZE : {cfg.INPUT.SIZE_TEST}, METRIC: {cfg.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg.TEST.HEAD_FUSION}', fontsize=16) 
+    ax = plt.subplot(2,11,1) # row, col, index
+    axis_off(ax)
+    imshow(query_path,'Query')
+    ax.text(10,140,f"ID : {query_label}")
+    ax.text(10,152,f"Cam : {query_cam}")
+    mask = Attention_map(query_path)
+    attn_ax = plt.subplot(2,11,12)
+    axis_off(attn_ax)
+    plt.imshow(mask)
+    plt.title('Query')
+    if cfg.TEST.VISUALIZE_METRIC == "Euclidean":
+        index = eucd_index
+        score = eucd_score
+    elif cfg.TEST.VISUALIZE_METRIC == "Cos":
+        index = cos_index
+        score = cos_score
+    else :
+        raise NotImplementedError("Visualize metric should be Euclidean or Cosine similarity")
+    for i in range(10):
+        ax = plt.subplot(2,11,i+2)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        img_path = (g_root + '/' + gallery_path_list[index[i]]).rstrip()
+        label = gallery_label[index[i]]
+        cam = gallery_cam[index[i]]
+        similarity_score = score[i]
+        imshow(img_path)
+        if label == query_label:
+            ax.set_title('%d'%(i+1), color='green')
+        else:
+            ax.set_title('%d'%(i+1), color='red')
+
+        ax.text(10,140,f"ID : {label}",)
+        ax.text(10,152,f"Cam : {cam}",)  
+        ax.text(0,164,"Score : {:.3f}".format(similarity_score))
+        
+        ax = plt.subplot(2,11,i+12+1)
+        axis_off(ax)
+        mask = Attention_map(img_path)
+        plt.imshow(mask)
+        print(img_path)
+    plt.subplots_adjust(hspace=0.01)
+    
+except RuntimeError:
+    for i in range(10):
+        img_path = (g_root + '/' + gallery_path_list[index[i]]).rstrip()
+        print(img_path)
+    print('If you want to see the visualization of the ranking result, graphical user interface is needed.')
+
+result_img_path = f'result/result_visualize/{cfg.INDEX}'
+os.makedirs(result_img_path,exist_ok=True)
+fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_INDEX}_{cfg.TEST.VISUALIZE_METRIC}.png")

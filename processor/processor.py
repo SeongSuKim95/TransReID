@@ -193,7 +193,7 @@ def do_inference(cfg,
     result = {'gallery_f':gf.numpy(),'gallery_label':g_pids,'gallery_cam':g_camids,'query_f':qf.numpy(),'query_label':q_pids,'query_cam':q_camids,'img_path': img_path_list,'q_dir':q_dir,'g_dir':g_dir,'Euclidean_dist':distmat_eucd, 'Cos_dist':distmat_cos} # type(label) ,type(cam) = list , type(feature)= torch.tensor
     path = 'result/result_matrix'
     os.makedirs(path,exist_ok=True)
-    scipy.io.savemat(f'{path}/{cfg.INDEX}.mat',result)
+    scipy.io.savemat(f'{path}/{cfg.INDEX}.mat',result)    
     
     if cfg.TEST.VISUALIZE :
         os.system(f'python -m processor.demo --config_file={args.config_file}')
