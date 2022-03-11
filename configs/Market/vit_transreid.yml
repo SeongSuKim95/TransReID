@@ -54,6 +54,8 @@ TEST:
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : True
+  VISUALIZE_RANK : 10 
+  VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_INDEX : 300
   HEAD_FUSION : 'mean'
   DISCARD_RATIO : 0.9

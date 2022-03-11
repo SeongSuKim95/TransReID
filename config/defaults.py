@@ -183,7 +183,8 @@ _C.TEST.DIST_MAT = "dist_mat.npy"
 # Whether calculate the eval score option: 'True', 'False'
 _C.TEST.EVAL = False
 _C.TEST.VISUALIZE = False
-_C.TEST.VISUALIZE_ID = 0
+_C.TEST.VISUALIZE_RANK  = 0
+_C.TEST.VISUALIZE_TYPE = 0 
 _C.TEST.VISUALIZE_INDEX = 0
 _C.TEST.VISUALIZE_METRIC = ""
 _C.TEST.HEAD_FUSION = 'max'
