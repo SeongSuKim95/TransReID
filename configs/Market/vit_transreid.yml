@@ -1,12 +1,12 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth'
+  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth' 
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
   SIE_CAMERA: True
@@ -53,7 +53,8 @@ TEST:
   WEIGHT: '../logs/market_vit_transreid/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
-  VISUALIZE : True
+  EVAL_METRIC: 'Euclidean'
+  VISUALIZE : False
   VISUALIZE_RANK : 10 
   VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_INDEX : 300
@@ -62,5 +63,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_transreid'
-INDEX : 2
+INDEX : 4
 

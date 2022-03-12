@@ -165,7 +165,7 @@ class Attention(nn.Module):
 
 
 class Block(nn.Module):
-
+    # Attention Block
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
@@ -179,8 +179,8 @@ class Block(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
     def forward(self, x):
-        x = x + self.drop_path(self.attn(self.norm1(x)))
-        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        x = x + self.drop_path(self.attn(self.norm1(x))) # Residual connection
+        x = x + self.drop_path(self.mlp(self.norm2(x))) # Residual connection
         return x
 
 
@@ -282,9 +282,9 @@ class PatchEmbed_overlap(nn.Module):
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x)
+        x = self.proj(x) # [bs,feat_dim,patch_height,patch_width]
 
-        x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
+        x = x.flatten(2).transpose(1, 2) # [bs, patch_height * patch_width, 768]
         return x
 
 
@@ -313,6 +313,12 @@ class TransReID(nn.Module):
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
+        # MSMT 17 = {Cam : 15}
+        # Market-1501 = {Cam : 6}
+        # DukeMTMC-reID = {Cam : 8}
+        # Occluded-Duke = {Cam : 8}
+        # VeRi-776 = {Cam : 20, View : 8}
+
         # Initialize SIE Embedding
         if camera > 1 and view > 1:
             self.sie_embed = nn.Parameter(torch.zeros(camera * view, 1, embed_dim))
@@ -321,7 +327,7 @@ class TransReID(nn.Module):
             print('using SIE_Lambda is : {}'.format(sie_xishu))
         elif camera > 1:
             self.sie_embed = nn.Parameter(torch.zeros(camera, 1, embed_dim))
-            trunc_normal_(self.sie_embed, std=.02)
+            trunc_normal_(self.sie_embed, std=.02) # Initialize side embedding paramter to normal distribution
             print('camera number is : {}'.format(camera))
             print('using SIE_Lambda is : {}'.format(sie_xishu))
         elif view > 1:
@@ -352,7 +358,7 @@ class TransReID(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m): # Layer initialize
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
@@ -373,11 +379,11 @@ class TransReID(nn.Module):
         self.fc = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x, camera_id, view_id):
-        B = x.shape[0]
-        x = self.patch_embed(x)
-
-        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
-        x = torch.cat((cls_tokens, x), dim=1)
+        B = x.shape[0] # Input_img : [bs,3,256,128]
+        x = self.patch_embed(x) # patch_tokens [bs,patch_num,feat_dim]
+        # self.cls_token.shape = [1,1,feat_dim]
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks. token_vector를 bs만큼 똑같이 복사후 concat [bs, 1, feat_dim]
+        x = torch.cat((cls_tokens, x), dim=1) # cls_token과 patch_token concat [bs, patch_num+1,feat_dim]
 
         if self.cam_num > 0 and self.view_num > 0:
             x = x + self.pos_embed + self.sie_xishu * self.sie_embed[camera_id * self.view_num + view_id]
@@ -386,17 +392,17 @@ class TransReID(nn.Module):
         elif self.view_num > 0:
             x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
         else:
-            x = x + self.pos_embed
+            x = x + self.pos_embed # x.shape =  [bs, patch_num + 1 ,feat_dim], self.pos_embed.shape = [1, patch_num+1, feat_dim], batch_broadcasting.
 
-        x = self.pos_drop(x)
+        x = self.pos_drop(x) # positional embedding dropout은 왜 필요하지..?
 
         if self.local_feature:
-            for blk in self.blocks[:-1]:
+            for blk in self.blocks[:-1]: # JPM_branch를 사용할 경우 마지막 layer가 변형되기 때문에, layer_num-1번째까지만 기본 block을 통과
                 x = blk(x)
             return x
 
         else:
-            for blk in self.blocks:
+            for blk in self.blocks: # 전체 depth 다 통과
                 x = blk(x)
 
             x = self.norm(x)
@@ -422,10 +428,11 @@ class TransReID(nn.Module):
                 v = v.reshape(O, -1, H, W)
             elif k == 'pos_embed' and v.shape != self.pos_embed.shape:
                 # To resize pos embedding when using model at different size from pretrained weights
+                # model_path = ./pretrain/jx_vit_base_p16_224-80ecf9dd.pth , pos_embed.shape = [1,197,768]
                 if 'distilled' in model_path:
                     print('distill need to choose right cls token in the pth')
                     v = torch.cat([v[:, 0:1], v[:, 2:]], dim=1)
-                v = resize_pos_embed(v, self.pos_embed, self.patch_embed.num_y, self.patch_embed.num_x)
+                v = resize_pos_embed(v, self.pos_embed, self.patch_embed.num_y, self.patch_embed.num_x) # linear interpolate positional embeddings
             try:
                 self.state_dict()[k].copy_(v)
             except:

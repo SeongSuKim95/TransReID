@@ -190,6 +190,7 @@ _C.TEST.VISUALIZE_METRIC = ""
 _C.TEST.HEAD_FUSION = 'max'
 _C.TEST.DISCARD_RATIO = 0.9
 _C.TEST.EXPLAIN = False
+_C.TEST.EVAL_METRIC = ""
 # ---------------------------------------------------------------------------- #
 # Misc options
 # ---------------------------------------------------------------------------- #

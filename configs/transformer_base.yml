@@ -1,6 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth'
+  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth' # imagenet pretrain weight
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
@@ -58,6 +58,6 @@ TEST:
   DISCARD_RATIO : 0.9
   EXPLAIN : False
   
-OUTPUT_DIR: './logs/market_vit_base'
+OUTPUT_DIR: './logs/market_vit_base_256_256'
 INDEX: 1
 

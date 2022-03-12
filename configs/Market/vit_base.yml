@@ -1,12 +1,12 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: '/home/heshuting/.cache/torch/checkpoints/jx_vit_base_p16_224-80ecf9dd.pth'
+  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth' 
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('7')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
 
@@ -21,7 +21,7 @@ INPUT:
 
 DATASETS:
   NAMES: ('market1501')
-  ROOT_DIR: ('../../data')
+  ROOT_DIR: ('/mnt/hdd_data/Dataset')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -49,10 +49,11 @@ TEST:
   WEIGHT: '../logs/0321_market_vit_base/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
-  VISUALIZE : True
+  VISUALIZE : False
   VISUALIZE_INDEX : 777
-  EXPLAIN : True
+  EXPLAIN : False
+  EVAL_METRIC: 'Euclidean'
 
-OUTPUT_DIR: '../logs/0321_market_vit_base'
-
+OUTPUT_DIR: './logs/market_vit_base_256_128'
+INDEX : 0
 

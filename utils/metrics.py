@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import os
 from utils.reranking import re_ranking
+from config import cfg
 
 def demo(qf,gf):
     return
@@ -144,10 +145,17 @@ class R1_mAP_eval():
             # distmat = re_ranking(qf, gf, k1=20, k2=6, lambda_value=0.3)
             distmat = re_ranking(qf, gf, k1=50, k2=15, lambda_value=0.3)
         else:
-            print('=> Computing DistMat with euclidean_distance')
             distmat_eucd = euclidean_distance(qf, gf) # qf.size() = [3368,768], , gf.size() = [15913,768]
             distmat_cos = cosine_similarity(qf, gf)
-        cmc, mAP = eval_func(distmat_cos, q_pids, g_pids, q_camids, g_camids) 
+        if cfg.TEST.EVAL_METRIC == 'Euclidean':
+            print('=> Computing DistMat with euclidean_distance')
+            cmc, mAP = eval_func(distmat_eucd, q_pids, g_pids, q_camids, g_camids) 
+        elif cfg.TEST.EVAL_METRIC == 'Cos':
+            print('=> Computing DistMat with cos_similarity')
+            cmc, mAP = eval_func(distmat_cos, q_pids, g_pids, q_camids, g_camids) 
+        else :
+            raise NotImplementedError("Visualize metric should be Euclidean or Cosine similarity")
+
         # dist_mat.size() = [3368,15913], len(q_pids) = 3368, len(g_pids) = 15913, len(q_camids) = 3368, len(g_camids) = 15913
         return cmc, mAP, distmat_eucd, distmat_cos, self.pids, self.camids, qf, gf, q_pids, g_pids, q_camids, g_camids
 

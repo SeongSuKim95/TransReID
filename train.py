@@ -49,7 +49,7 @@ if __name__ == '__main__':
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    logger = setup_logger("transreid", output_dir, if_train=True) # Setting loger
+    logger = setup_logger("transreid", output_dir, cfg.INDEX,if_train=True) # Setting loger
     logger.info("Saving model in the path :{}".format(cfg.OUTPUT_DIR))
     logger.info(args)
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID # CUDA_VISIBLE device Setup
 
-    train_loader, train_loader_normal, query_loader, galleryt_loader, val_loader, num_query, num_classes, camera_num, view_num = make_dataloader(cfg)
+    train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num, _, _, _, _ = make_dataloader(cfg)
     
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
 

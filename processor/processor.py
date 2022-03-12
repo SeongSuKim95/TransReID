@@ -60,13 +60,17 @@ def do_train(cfg,
             target_cam = target_cam.to(device)
             target_view = target_view.to(device)
             with amp.autocast(enabled=True):
-                score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
                 # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
                 # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
+                score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
+                # JPM을 사용할 경우
+                # score, feat의 개수는 JPM branch 개수와 같다
+                # score.size = [#JPM,bs,train_ID] [5,64,751]
+                # feat.size = [#JPM,bs,feat_size] [5,64,768]
+
                 loss = loss_fn(score, feat, target, target_cam)
 
             scaler.scale(loss).backward()
-
             scaler.step(optimizer)
             scaler.update()
 
@@ -76,8 +80,8 @@ def do_train(cfg,
                 scaler.step(optimizer_center)
                 scaler.update()
                 # center loss의 parameter에 대해서도 update
-            if isinstance(score, list):
-                acc = (score[0].max(1)[1] == target).float().mean()
+            if isinstance(score, list): # JPM 
+                acc = (score[0].max(1)[1] == target).float().mean() # Train_accuracy는 global_branch score로 결정
             else:
                 acc = (score.max(1)[1] == target).float().mean()
 
@@ -133,7 +137,7 @@ def do_train(cfg,
                         target_view = target_view.to(device)
                         feat = model(img, cam_label=camids, view_label=target_view)
                         evaluator.update((feat, vid, camid))
-                cmc, mAP, _, _, _, _, _ = evaluator.compute()
+                cmc, mAP, _, _, _, _, _, _, _, _, _, _  = evaluator.compute()
                 logger.info("Validation Results - Epoch: {}".format(epoch))
                 logger.info("mAP: {:.1%}".format(mAP))
                 for r in [1, 5, 10]:

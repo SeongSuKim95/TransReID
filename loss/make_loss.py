@@ -47,7 +47,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         ID_LOSS = xent(score, target) # LabelSmooth
 
                     if isinstance(feat, list):
-                            TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]]
+                            TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]] # Equation (4)
                             TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
                             TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:

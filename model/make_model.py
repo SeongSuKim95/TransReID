@@ -6,22 +6,45 @@ from .backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_pat
 from loss.metric_learning import Arcface, Cosface, AMSoftmax, CircleLoss
 
 def shuffle_unit(features, shift, group, begin=1):
-
+    # features = [bs, #patch_num + 1, feat_dim]
     batchsize = features.size(0)
     dim = features.size(-1)
     # Shift Operation
-    feature_random = torch.cat([features[:, begin-1+shift:], features[:, begin:begin-1+shift]], dim=1)
-    x = feature_random
+    feature_random = torch.cat([features[:, begin-1+shift:], features[:, begin:begin-1+shift]], dim=1) # patch를 shift 수 만큼 shift, 이 떄 cls token은 제외
+    # features : 0,1,2,3,4,..,128
+    # feature_random : 5,6,7,...,128,1,2,3,4
+    x = feature_random # [bs, #patch, dim] 
     # Patch Shuffle Operation
     try:
-        x = x.view(batchsize, group, -1, dim)
+        x = x.view(batchsize, group, -1, dim) # [bs, group, #patch/group, dim] shuffle된 patch를 group개로 분할
     except:
         x = torch.cat([x, x[:, -2:-1, :]], dim=1)
         x = x.view(batchsize, group, -1, dim)
 
-    x = torch.transpose(x, 1, 2).contiguous()
+    x = torch.transpose(x, 1, 2).contiguous() 
     x = x.view(batchsize, -1, dim)
-
+    
+    # a = torch.tensor([[1,2,3],[4,5,6],[7,8,9],[10,11,12],[13,14,15],[16,17,18],[19,20,21],[22,23,24],[25,26,27]])
+    # b = torch.cat([a[4:], a[1:4]], dim=0)
+    # tensor([[13, 14, 15],[16, 17, 18],[19, 20, 21],[22, 23, 24],[25, 26, 27],[ 4,  5,  6],[ 7,  8,  9],[10, 11, 12]])
+    # c = b.view(1,4,-1,3)
+    # tensor([[[[13, 14, 15],
+    #           [16, 17, 18]],
+    #          [[19, 20, 21],
+    #           [22, 23, 24]],
+    #          [[25, 26, 27],
+    #           [ 4,  5,  6]],
+    #          [[ 7,  8,  9],
+    #           [10, 11, 12]]]])
+    # d = torch.transpose(c,1,2).contiguous()
+    # tensor([[[[13, 14, 15],
+    #           [19, 20, 21],
+    #           [25, 26, 27],
+    #           [ 7,  8,  9]],
+    #          [[16, 17, 18],
+    #           [22, 23, 24],
+    #           [ 4,  5,  6],
+    #           [10, 11, 12]]]])
     return x
 
 def weights_init_kaiming(m):
@@ -248,7 +271,7 @@ class build_transformer_local(nn.Module):
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
 
-        block = self.base.blocks[-1]
+        block = self.base.blocks[-1] # Last encoder layer
         layer_norm = self.base.norm
         self.b1 = nn.Sequential(
             copy.deepcopy(block),
@@ -315,37 +338,37 @@ class build_transformer_local(nn.Module):
 
     def forward(self, x, label=None, cam_label= None, view_label=None):  # label is unused if self.cos_layer == 'no'
 
-        features = self.base(x, cam_label=cam_label, view_label=view_label)
+        features = self.base(x, cam_label=cam_label, view_label=view_label) # features.shape = [bs, #patch + 1, feat_dim]
 
         # global branch
-        b1_feat = self.b1(features) # [64, 129, 768]
-        global_feat = b1_feat[:, 0]
+        b1_feat = self.b1(features) # self.b1 = last layer + layer_norm
+        global_feat = b1_feat[:, 0] # cls_token feature, [bs, feat_dim]
 
         # JPM branch
-        feature_length = features.size(1) - 1
-        patch_length = feature_length // self.divide_length
-        token = features[:, 0:1]
+        feature_length = features.size(1) - 1 # number of patches
+        patch_length = feature_length // self.divide_length # divide patches into 4(branch_num) groups
+        token = features[:, 0:1] # last layer를 통과하지 않은 features 들중 첫번째 token [bs,1,feat_dim]
 
-        if self.rearrange:
-            x = shuffle_unit(features, self.shift_num, self.shuffle_groups)
+        if self.rearrange: 
+            x = shuffle_unit(features, self.shift_num, self.shuffle_groups) # features.shape = [bs, #patch + 1, feat_dim], self.shift_num = 5, self.shuffle_groups = 2
         else:
             x = features[:, 1:]
-        # lf_1
+        # lf_1 (local_feature)
         b1_local_feat = x[:, :patch_length]
-        b1_local_feat = self.b2(torch.cat((token, b1_local_feat), dim=1))
+        b1_local_feat = self.b2(torch.cat((token, b1_local_feat), dim=1)) # self.b2 : global_branch와 별도의 encoder layer + layer_norm
         local_feat_1 = b1_local_feat[:, 0]
 
-        # lf_2
+        # lf_2 (local_feature)
         b2_local_feat = x[:, patch_length:patch_length*2]
         b2_local_feat = self.b2(torch.cat((token, b2_local_feat), dim=1))
         local_feat_2 = b2_local_feat[:, 0]
 
-        # lf_3
+        # lf_3 (local_feature)
         b3_local_feat = x[:, patch_length*2:patch_length*3]
         b3_local_feat = self.b2(torch.cat((token, b3_local_feat), dim=1))
         local_feat_3 = b3_local_feat[:, 0]
 
-        # lf_4
+        # lf_4 (local_feature)
         b4_local_feat = x[:, patch_length*3:patch_length*4]
         b4_local_feat = self.b2(torch.cat((token, b4_local_feat), dim=1))
         local_feat_4 = b4_local_feat[:, 0]
@@ -355,7 +378,7 @@ class build_transformer_local(nn.Module):
         local_feat_1_bn = self.bottleneck_1(local_feat_1)
         local_feat_2_bn = self.bottleneck_2(local_feat_2)
         local_feat_3_bn = self.bottleneck_3(local_feat_3)
-        local_feat_4_bn = self.bottleneck_4(local_feat_4)
+        local_feat_4_bn = self.bottleneck_4(local_feat_4) 
 
         if self.training:
             if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
@@ -370,7 +393,7 @@ class build_transformer_local(nn.Module):
                         cls_score_4
                         ], [global_feat, local_feat_1, local_feat_2, local_feat_3,
                             local_feat_4]  # global feature for triplet loss
-        else:
+        else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
             if self.neck_feat == 'after':
                 return torch.cat(
                     [feat, local_feat_1_bn / 4, local_feat_2_bn / 4, local_feat_3_bn / 4, local_feat_4_bn / 4], dim=1)
