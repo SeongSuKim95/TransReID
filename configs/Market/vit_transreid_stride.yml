@@ -1,12 +1,12 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: '/home/heshuting/.cache/torch/checkpoints/jx_vit_base_p16_224-80ecf9dd.pth'
+  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth' 
   METRIC_LOSS_TYPE: 'triplet'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('5')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [12, 12]
   SIE_CAMERA: True
@@ -25,7 +25,7 @@ INPUT:
 
 DATASETS:
   NAMES: ('market1501')
-  ROOT_DIR: ('../../data')
+  ROOT_DIR: ('/mnt/hdd_data/Dataset')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -39,9 +39,9 @@ SOLVER:
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
-  CHECKPOINT_PERIOD: 120
+  CHECKPOINT_PERIOD: 30
   LOG_PERIOD: 50
-  EVAL_PERIOD: 120
+  EVAL_PERIOD: 30
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
@@ -53,7 +53,8 @@ TEST:
   WEIGHT: ''
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
+  EVAL_METRIC: 'Euclidean'
 
-OUTPUT_DIR: '../logs/market_vit_transreid_stride'
+OUTPUT_DIR: './logs/market_vit_transreid_stride'
 
 

@@ -39,9 +39,9 @@ SOLVER:
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
-  CHECKPOINT_PERIOD: 120
+  CHECKPOINT_PERIOD: 30
   LOG_PERIOD: 50
-  EVAL_PERIOD: 120
+  EVAL_PERIOD: 30
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
@@ -50,15 +50,16 @@ TEST:
   EVAL: True
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: '../logs/market_vit_transreid/transformer_120.pth'
+  WEIGHT: './logs/market_vit_transreid/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   EVAL_METRIC: 'Euclidean'
   VISUALIZE : False
   VISUALIZE_RANK : 10 
   VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
-  VISUALIZE_INDEX : 300
-  HEAD_FUSION : 'mean'
+  VISUALIZE_INDEX : 777
+  VISUALIZE_METRIC : 'Euclidean'
+  HEAD_FUSION : 'max'
   DISCARD_RATIO : 0.9
   EXPLAIN : False
 

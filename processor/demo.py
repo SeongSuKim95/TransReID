@@ -108,6 +108,7 @@ query_feature = query_feature.cuda()
 gallery_feature = gallery_feature.cuda()
 i = cfg.TEST.VISUALIZE_INDEX
 rank = cfg.TEST.VISUALIZE_RANK
+
 #######################################################################
 def sort_img_eucd(dist_eucd, index, ql, qc, gl, gc):
     
@@ -234,7 +235,7 @@ def max_dist(dist, rank, ql, qc, gl, gc):
     
     return dist_max_query, dist_max_index, dist_max_score
 
-def Attention_map(img_path):
+def Attention_map(img_path,cam_label=None):
     img = Image.open(img_path)
     img_input = img.resize(cfg.INPUT.SIZE_TEST)
     input_tensor = transform(img_input).unsqueeze(0)
@@ -242,7 +243,7 @@ def Attention_map(img_path):
         input_tensor = input_tensor.cuda()
     attention_rollout = VITAttentionRollout(model, head_fusion=cfg.TEST.HEAD_FUSION, 
     discard_ratio=cfg.TEST.DISCARD_RATIO)
-    mask = attention_rollout(input_tensor)
+    mask = attention_rollout(input_tensor,cam_label)
     # name = "attention_rollout_{:.3f}_{}.png".format(args.discard_ratio, args.head_fusion)
 
     np_img = np.array(img)[:, :, ::-1]
@@ -275,7 +276,10 @@ if cfg.TEST.VISUALIZE_TYPE == 0 :
     imshow(query_path,'Query')
     ax.text(10,140,f"ID : {query_label_i}")
     ax.text(10,152,f"Cam : {query_cam_i}")
-    mask = Attention_map(query_path)
+    if cfg.MODEL.SIE_CAMERA:
+        mask = Attention_map(query_path,query_cam_i)
+    else:
+        mask = Attention_map(query_path)
     attn_ax = plt.subplot(2,rank+1,rank+2)
     axis_off(attn_ax)
     plt.imshow(mask)
@@ -309,14 +313,17 @@ if cfg.TEST.VISUALIZE_TYPE == 0 :
         
         ax = plt.subplot(2,rank+1,i+rank+2+1)
         axis_off(ax)
-        mask = Attention_map(img_path)
+        if cfg.MODEL.SIE_CAMERA:
+            mask = Attention_map(img_path,cam)
+        else:
+            mask = Attention_map(img_path)
         plt.imshow(mask)
         print(img_path)
 
     plt.subplots_adjust(hspace=0.01)
     result_img_path = f'result/result_visualize/{cfg.INDEX}'
     os.makedirs(result_img_path,exist_ok=True)
-    fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.VISUALIZE_INDEX}_{cfg.TEST.VISUALIZE_METRIC}.png")
+    fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.VISUALIZE_INDEX}_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}_{cfg.TEST.VISUALIZE_METRIC}.png")
 
 elif cfg.TEST.VISUALIZE_TYPE == 1 :
 
@@ -338,7 +345,10 @@ elif cfg.TEST.VISUALIZE_TYPE == 1 :
         imshow(query_path,'Query')
         ax.text(10,140,f"ID : {query_label_iter}")
         ax.text(10,152,f"Cam : {query_cam_iter}")
-        mask = Attention_map(query_path)
+        if cfg.MODEL.SIE_CAMERA:
+            mask = Attention_map(query_path,query_cam_iter)
+        else:
+            mask = Attention_map(query_path)        
         attn_ax = plt.subplot(vis_num*2,rank+1,(2*iter+1)*(rank+1)+1)
         axis_off(attn_ax)
         plt.imshow(mask)
@@ -367,13 +377,16 @@ elif cfg.TEST.VISUALIZE_TYPE == 1 :
             
             ax = plt.subplot(vis_num*2,rank+1,i+(2*iter+1)*(rank+1)+2)
             axis_off(ax)
-            mask = Attention_map(img_path)
+            if cfg.MODEL.SIE_CAMERA:
+                mask = Attention_map(img_path,cam)
+            else:
+                mask = Attention_map(img_path)              
             plt.imshow(mask)
             print(img_path)
     plt.subplots_adjust(hspace=0.01)
     result_img_path = f'result/result_visualize/{cfg.INDEX}'
     os.makedirs(result_img_path,exist_ok=True)
-    fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.VISUALIZE_METRIC}.png")
+    fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}_{cfg.TEST.VISUALIZE_METRIC}.png")
 
 elif cfg.TEST.VISUALIZE_TYPE == 2 :
     
@@ -395,7 +408,10 @@ elif cfg.TEST.VISUALIZE_TYPE == 2 :
         imshow(query_path,'Query')
         ax.text(10,140,f"ID : {query_label_iter}")
         ax.text(10,152,f"Cam : {query_cam_iter}")
-        mask = Attention_map(query_path)
+        if cfg.MODEL.SIE_CAMERA:
+            mask = Attention_map(query_path,query_cam_iter)
+        else:
+            mask = Attention_map(query_path)             
         attn_ax = plt.subplot(vis_num*2,rank+1,(2*iter+1)*(rank+1)+1)
         axis_off(attn_ax)
         plt.imshow(mask)
@@ -423,11 +439,14 @@ elif cfg.TEST.VISUALIZE_TYPE == 2 :
             
             ax = plt.subplot(vis_num*2,rank+1,i+(2*iter+1)*(rank+1)+2)
             axis_off(ax)
-            mask = Attention_map(img_path)
+            if cfg.MODEL.SIE_CAMERA:
+                mask = Attention_map(img_path,cam)
+            else:
+                mask = Attention_map(img_path)              
             plt.imshow(mask)
             print(img_path)
         plt.subplots_adjust(hspace=0.01)
 
         result_img_path = f'result/result_visualize/{cfg.INDEX}'
         os.makedirs(result_img_path,exist_ok=True)
-        fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.VISUALIZE_METRIC}.png")
+        fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}_{cfg.TEST.VISUALIZE_METRIC}.png")

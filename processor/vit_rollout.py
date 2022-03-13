@@ -54,7 +54,7 @@ def rollout_batch(attentions, discard_ratio, head_fusion):
     # mask = mask/ np.max(mask)
     return mask    # (batch_size,patch,patch)
 
-def rollout(attentions, discard_ratio, head_fusion):
+def rollout(attentions, discard_ratio, head_fusion,input_shape):
     result = torch.eye(attentions[0].size(-1))
     # attentions.size() = [12,1,3,197,197]
     with torch.no_grad():
@@ -87,9 +87,13 @@ def rollout(attentions, discard_ratio, head_fusion):
     # and the image patches
     # result.size() = (1,197,197)
     mask = result[0, 0 , 1 :] # mask size = 196, except cls token
+
     # In case of 224x224 image, this brings us from 196 to 14
-    width = int(mask.size(-1)**0.5) # 196 ** (1/2) = 14
-    mask = mask.reshape(width, width).numpy()
+    patch_size = (input_shape[-2]*input_shape[-1]/(attentions[0].size(-1)-1))**0.5
+    height = int(input_shape[-2] / patch_size)
+    width = int(input_shape[-1] / patch_size)
+    # width = int(mask.size(-1)**0.5) # 196 ** (1/2) = 14
+    mask = mask.reshape(height, width).numpy()
     mask = mask / np.max(mask)
     return mask    # (14,14)
 class VITAttentionRollout:
@@ -110,14 +114,16 @@ class VITAttentionRollout:
         # output.size() = torch.size([batch,12,257,257])
         self.attentions.append(output.cpu())
 
-    def __call__(self, input_tensor):
+    def __call__(self, input_tensor,cam_label=None):
         self.attentions = []
         with torch.no_grad():
-            output = self.model(input_tensor) # register_forward_hook으로 get_attention함수가 추가되어 있는 상태로 input_tensor의 forward가 진행
+            output = self.model(input_tensor,cam_label=cam_label) # register_forward_hook으로 get_attention함수가 추가되어 있는 상태로 input_tensor의 forward가 진행
             # self.attentions list에 attention map들이 append 됨
         # print(len(self.attentions)) == 12
         # 이 map들을 가지고 roll out함수 수행
-        return rollout(self.attentions, self.discard_ratio, self.head_fusion)
+        if len(self.attentions) > 12 : # IF JPM branch exists, last 4 attention maps are ignored  
+            self.attentions = self.attentions[:12]
+        return rollout(self.attentions, self.discard_ratio, self.head_fusion,input_tensor.shape)
 
 # attention_rollout = VITAttentionRollout(model, head_fusion=args.head_fusion, 
 # discard_ratio=args.discard_ratio)
