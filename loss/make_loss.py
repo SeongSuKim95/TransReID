@@ -6,8 +6,10 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import TripletLoss
+from .triplet_loss import TripletLoss, TripletAttentionLoss
 from .center_loss import CenterLoss
+import torch
+from typing import Tuple
 
 # Loss 는 class로 구성
 def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
@@ -26,6 +28,16 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     else:
         print('expected METRIC_LOSS_TYPE should be triplet'
               'but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+    if 'hnewth' in cfg.MODEL.METRIC_LOSS_TYPE:
+        if cfg.MODEL.NO_MARGIN :
+            print("Debug point")
+        else : 
+            triplet = TripletAttentionLoss(cfg.SOLVER.MARGIN)
+            def loss_func(
+                feat, target, cls_param
+            ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                loss_triplet = triplet(feat, target, cls_param)[0]
+                return loss_triplet
 
     if cfg.MODEL.IF_LABELSMOOTH == 'on':
         xent = CrossEntropyLabelSmooth(num_classes=num_classes)
