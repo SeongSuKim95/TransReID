@@ -25,6 +25,7 @@ def do_train(cfg,
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     eval_period = cfg.SOLVER.EVAL_PERIOD
+    triplet_type = cfg.MODEL.METRIC_LOSS_TYPE
 
     device = "cuda"
     epochs = cfg.SOLVER.MAX_EPOCHS
@@ -67,9 +68,10 @@ def do_train(cfg,
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
-
-                loss = loss_fn(score, feat, target, target_cam)
-
+                if triplet_type == 'triplet':
+                    loss = loss_fn(score, feat, target, target_cam)
+                elif triplet_type == 'hnewth':
+                    loss = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()

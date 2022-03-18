@@ -1,12 +1,12 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_PATH: './pretrain/jx_vit_base_p16_224-80ecf9dd.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  PRETRAIN_PATH: './pretrain/vit_image_net_224.pth' 
+  METRIC_LOSS_TYPE: 'hnewth'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
-  NO_MARGIN: True
-  DEVICE_ID: ('0')
+  NO_MARGIN: False
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
 
@@ -36,8 +36,8 @@ SOLVER:
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 120
-  LOG_PERIOD: 50
-  EVAL_PERIOD: 120
+  LOG_PERIOD: 20
+  EVAL_PERIOD: 30
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
