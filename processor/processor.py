@@ -11,6 +11,7 @@ from utils.metrics import R1_mAP_eval, demo
 from torch.cuda import amp
 import torch.distributed as dist
 from .vit_rollout import VITAttentionRollout
+import wandb
 
 def do_train(cfg,
              model,
@@ -22,6 +23,10 @@ def do_train(cfg,
              scheduler,
              loss_fn,
              num_query, local_rank):
+    if cfg.WANDB : 
+        wandb.init(project="TransReID", entity="panda0728")
+        wandb.watch(model,loss_fn, log = "all", log_freq = 1)
+
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     eval_period = cfg.SOLVER.EVAL_PERIOD
@@ -41,7 +46,11 @@ def do_train(cfg,
 
     loss_meter = AverageMeter()
     acc_meter = AverageMeter() # Averaging acc, loss
-
+    if cfg.WANDB : 
+        loss_HTH_meter = AverageMeter()
+        loss_TH_meter = AverageMeter()
+        loss_HNTH_P2_meter = AverageMeter()
+        
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM) # Evaluating R1, mAP
 
     scaler = amp.GradScaler()
@@ -68,10 +77,12 @@ def do_train(cfg,
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
+                
+                
                 if triplet_type == 'triplet':
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type == 'hnewth':
-                    loss = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
+                    loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -88,6 +99,11 @@ def do_train(cfg,
                 acc = (score.max(1)[1] == target).float().mean()
 
             loss_meter.update(loss.item(), img.shape[0])
+            if cfg.WANDB :
+                loss_HTH_meter.update(HTH.item(), img.shape[0])
+                loss_TH_meter.update(TH.item(), img.shape[0])
+                loss_HNTH_P2_meter.update(HNTH_P2.item(), img.shape[0])
+
             acc_meter.update(acc, 1)
 
             torch.cuda.synchronize() # cuda의 work group 내의 모든 wavefront속 kernel이 전부 연산을 마칠때까지 기다려줌 
@@ -95,6 +111,13 @@ def do_train(cfg,
                 logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
                             .format(epoch, (n_iter + 1), len(train_loader),
                                     loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
+                if cfg.WANDB : 
+                    wandb.log({'Train Epoch': epoch, 
+                            'loss' : loss_meter.avg, 
+                            'HTH' : loss_HTH_meter.avg, 
+                            'TH': loss_TH_meter.avg, 
+                            'HNTH_P2': loss_HNTH_P2_meter.avg, 
+                            'Learning rate': scheduler._get_lr(epoch)[0]})
 
         end_time = time.time() #Epoch마다 걸리는 시간 측정      
         time_per_batch = (end_time - start_time) / (n_iter + 1) # Batch수로 나누어주어 batch마다 걸리는 시간 측정
@@ -108,10 +131,10 @@ def do_train(cfg,
             if cfg.MODEL.DIST_TRAIN:
                 if dist.get_rank() == 0:
                     torch.save(model.state_dict(),
-                           os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}.pth'.format(epoch)))
+                           os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}_{}.pth'.format(epoch,cfg.INDEX)))
             else:
                 torch.save(model.state_dict(),
-                           os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}.pth'.format(epoch)))
+                           os.path.join(cfg.OUTPUT_DIR, cfg.MODEL.NAME + '_{}_{}.pth'.format(epoch,cfg.INDEX)))
 
         if epoch % eval_period == 0:
             if cfg.MODEL.DIST_TRAIN:
@@ -144,6 +167,8 @@ def do_train(cfg,
                 logger.info("mAP: {:.1%}".format(mAP))
                 for r in [1, 5, 10]:
                     logger.info("CMC curve, Rank-{:<3}:{:.1%}".format(r, cmc[r - 1]))
+                if cfg.WANDB : 
+                    wandb.log({'Val Epoch': epoch, 'mAP' : mAP, 'Rank1' : cmc[0], 'Rank5': cmc[4], 'Rank10': cmc[9]})
                 torch.cuda.empty_cache()
 
 

@@ -6,7 +6,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: False
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
 
@@ -30,14 +30,14 @@ DATALOADER:
 
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
-  MAX_EPOCHS: 120
+  MAX_EPOCHS: 50
   BASE_LR: 0.008
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
-  CHECKPOINT_PERIOD: 120
+  CHECKPOINT_PERIOD: 100
   LOG_PERIOD: 20
-  EVAL_PERIOD: 30
+  EVAL_PERIOD: 100
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
@@ -46,7 +46,7 @@ TEST:
   EVAL: True
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: './logs/market_vit_base_256_128/transformer_120.pth'
+  WEIGHT: './logs/market_vit_base_256_128/transformer_30_0.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : False
@@ -60,5 +60,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 0
-
+INDEX : 99
+WANDB : False

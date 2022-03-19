@@ -72,6 +72,7 @@ def hard_example_distance(dist_mat, labels):
     dist_ap, relative_p_inds = torch.max(
         dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True
     )
+    # 
     # `dist_an` means distance(anchor, negative)
     # both `dist_an` and `relative_n_inds` with shape [N, 1]
     dist_an, relative_n_inds = torch.min(
@@ -196,8 +197,8 @@ def hard_example_mining_with_inds(dist_mat, labels):
     # shape [N]
     p_inds = p_inds.squeeze(1)
     n_inds = n_inds.squeeze(1)
-    # p_inds : the most far sample index among postive ID
-    # n_inds : the most close sample index among negative ID
+    # p_inds : the most far sample index among postive ID (global index)
+    # n_inds : the most close sample index among negative ID (global index)
 
     return dist_ap, dist_an, dist_an_mean, p_inds, n_inds
 
@@ -254,7 +255,7 @@ class TripletAttentionLoss(object):
         labels: torch.Tensor,
         cls_param: torch.Tensor,
         normalize_feature: bool = False,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if normalize_feature:
             global_feat = normalize_max(global_feat, axis=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
@@ -268,45 +269,57 @@ class TripletAttentionLoss(object):
             ind_neg,
         ) = hard_example_mining_with_inds(dist_mat, labels)
         neg_weight = self.weight(ind_neg, cls_param.detach(), labels) # weight abs차의 normalize 값이 threshold 보다 작으면 0 
-        # neg_weight --> [64,2048]
+        # neg_weight --> BoT : [64,2048] , ViT : [64, 768]
         # global_feat --> [64,2048] 
         # Euclidean distance between Weighted feature of Anchor & negative, positive
         dist_neg = torch.sum(
             (global_feat * neg_weight - global_feat[ind_neg] * neg_weight).pow(2), dim=1
-        ).sqrt()
+        ).sqrt() # * : element wise multiplication
         dist_pos = torch.sum(
             (global_feat * neg_weight - global_feat[ind_pos] * neg_weight).pow(2), dim=1
         ).sqrt()
-        y = dist_an.new().resize_as_(dist_an).fill_(1)
+        y = dist_an.new().resize_as_(dist_an).fill_(1) # y.shape = 64
 
         if self.margin is not None:
-            Triplet_loss = (
-                self.ranking_loss(dist_an.detach(), dist_ap, y)
-                + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
-                + self.ranking_loss(dist_neg, dist_pos, y)
-            )  # NEWTH
+            
+            HTH = self.ranking_loss(dist_an.detach(), dist_ap, y)
+            TH =  self.ranking_loss(dist_neg,dist_pos,y)
+            HNTH_P2 = self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
+            
+            # NEWTH
+            Triplet_loss = HTH + TH + HNTH_P2
+            
+            # EWTH
             # loss = self.ranking_loss(dist_an.detach(), dist_ap, y) + self.ranking_loss(
             #     dist_neg, dist_pos, y
-            # )  # EWTH
+            # ) 
+
+            # HNTH
             # loss = self.ranking_loss(dist_an.detach(), dist_ap, y) + self.ranking_loss(
             #     dist_an_mean, dist_ap.detach(), y
-            # )  # HNTH
-            # loss = self.ranking_loss(dist_an.detach(), dist_ap, y) # HTH
-            # loss = self.ranking_loss(dist_an, dist_ap, y) # TH
+            # ) 
+
+            # HTH
+            # loss = self.ranking_loss(dist_an.detach(), dist_ap, y) 
+            
+            # TH
+            # loss = self.ranking_loss(dist_an, dist_ap, y) 
         else:
             Triplet_loss = (
                 self.ranking_loss(dist_an.detach() - dist_ap, y)
                 + self.ranking_loss(dist_neg - dist_pos, y)
                 + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
             )
+        if torch.isnan(Triplet_loss):
+            print("d")
 
-        return Triplet_loss,dist_ap,dist_an
+        return Triplet_loss,HTH,TH,HNTH_P2 
 
     def weight(
         self, ind_neg: torch.Tensor, param: torch.Tensor, target: torch.Tensor
-    ) -> torch.Tensor:
+    ) -> torch.Tensor: # target = labels
         t = 0.1
-        weight_neg1 = param[target] # 각 sample ID의 weight vector
+        weight_neg1 = param[target] # 각 sample ID의 weight vector [64,768]
         weight_neg2 = param[target[ind_neg]] # 각 sample ID와 가장 먼 sample ID의 weight vector
         weight_neg = torch.abs(weight_neg1 - weight_neg2) # 둘의 차이, [64,2048]
         max, _ = torch.max(weight_neg, dim=1, keepdim=True) # max : [64,1] , weight_neg 각 행에서 가장 큰 값

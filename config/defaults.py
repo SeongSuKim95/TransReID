@@ -199,3 +199,6 @@ _C.OUTPUT_DIR = ""
 
 # Model INDEX
 _C.INDEX = None
+
+# Weight and Biase debug
+_C.WANDB = False

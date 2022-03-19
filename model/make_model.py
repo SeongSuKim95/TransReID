@@ -169,7 +169,8 @@ class build_transformer(nn.Module): # nn.Module 상속
         self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, sie_xishu=cfg.MODEL.SIE_COE,
                                                         camera=camera_num, view=view_num, stride_size=cfg.MODEL.STRIDE_SIZE, drop_path_rate=cfg.MODEL.DROP_PATH,
                                                         drop_rate= cfg.MODEL.DROP_OUT,
-                                                        attn_drop_rate=cfg.MODEL.ATT_DROP_RATE)
+                                                        attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
+                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE)
         if cfg.MODEL.TRANSFORMER_TYPE == 'deit_small_patch16_224_TransReID':
             self.in_planes = 384
         if pretrain_choice == 'imagenet':
