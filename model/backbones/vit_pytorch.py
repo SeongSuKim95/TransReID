@@ -408,10 +408,10 @@ class TransReID(nn.Module):
 
             x = self.norm(x)
             
-            # if self.loss_type == "hnewth":
-            #     return x
-            # else :
-            return x[:, 0]
+            if self.loss_type == "hnewth_patch":
+                return x
+            else :
+                return x[:, 0]
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
         return x
