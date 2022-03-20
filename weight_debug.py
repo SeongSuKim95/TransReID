@@ -42,22 +42,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--weight_dir1", default="", help="path to weight file", type=str
     )
-    parser.add_argument(
-        "--weight_dir2", default="", help="path to weight file", type=str
-    )
+    # parser.add_argument(
+    #     "--weight_dir2", default="", help="path to weight file", type=str
+    # )
     args = parser.parse_args()
 
     model_path1 = args.weight_dir1
-    model_path2 = args.weight_dir2
+    # model_path2 = args.weight_dir2
     
     param_dict1 = torch.load(model_path1, map_location='cpu')
-    param_dict2 = torch.load(model_path2, map_location='cpu')
+    # param_dict2 = torch.load(model_path2, map_location='cpu')
 
-    weight_1 = param_dict1['classifier.weight']
-    weight_2 = param_dict2['classifier.weight']
+    print(param_dict1['base.patch_embed.proj.weight'].shape)
+    # weight_1 = param_dict1['classifier.weight']
+
+
+    # weight_2 = param_dict2['classifier.weight']
     # for k, v in param_dict.items():
     #     if "classifier" in k:
     #         classifier_weight_1 = v
 
-    visualize_similarity(weight_1,weight_2)
+    # visualize_similarity(weight_1,weight_2)
     

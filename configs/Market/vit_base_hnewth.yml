@@ -1,12 +1,12 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_PATH: './pretrain/vit_image_net_224.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  METRIC_LOSS_TYPE: 'hnewth'
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: False
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
 
@@ -30,8 +30,8 @@ DATALOADER:
 
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
-  MAX_EPOCHS: 120
-  BASE_LR: 0.008
+  MAX_EPOCHS: 200
+  BASE_LR: 0.001
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -60,5 +60,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 101
+INDEX : 104
 WANDB : True

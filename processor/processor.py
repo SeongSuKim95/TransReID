@@ -46,7 +46,7 @@ def do_train(cfg,
 
     loss_meter = AverageMeter()
     acc_meter = AverageMeter() # Averaging acc, loss
-    if cfg.WANDB : 
+    if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE : 
         loss_HTH_meter = AverageMeter()
         loss_TH_meter = AverageMeter()
         loss_HNTH_P2_meter = AverageMeter()
@@ -102,7 +102,7 @@ def do_train(cfg,
                 acc = (score.max(1)[1] == target).float().mean()
 
             loss_meter.update(loss.item(), img.shape[0])
-            if cfg.WANDB :
+            if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE:
                 loss_HTH_meter.update(HTH.item(), img.shape[0])
                 loss_TH_meter.update(TH.item(), img.shape[0])
                 loss_HNTH_P2_meter.update(HNTH_P2.item(), img.shape[0])
@@ -115,13 +115,17 @@ def do_train(cfg,
                             .format(epoch, (n_iter + 1), len(train_loader),
                                     loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
-                    wandb.log({'Train Epoch': epoch, 
-                            'loss' : loss_meter.avg, 
-                            'HTH' : loss_HTH_meter.avg, 
-                            'TH': loss_TH_meter.avg, 
-                            'HNTH_P2': loss_HNTH_P2_meter.avg, 
-                            'Learning rate': scheduler._get_lr(epoch)[0]})
-
+                    if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE:
+                        wandb.log({ 'Train Epoch': epoch, 
+                                    'loss' : loss_meter.avg, 
+                                    'HTH' : loss_HTH_meter.avg, 
+                                    'TH': loss_TH_meter.avg, 
+                                    'HNTH_P2': loss_HNTH_P2_meter.avg, 
+                                    'Learning rate': scheduler._get_lr(epoch)[0]})
+                    else :
+                         wandb.log({ 'Train Epoch': epoch, 
+                                    'loss' : loss_meter.avg, 
+                                    'Learning rate': scheduler._get_lr(epoch)[0]})
         end_time = time.time() #Epoch마다 걸리는 시간 측정      
         time_per_batch = (end_time - start_time) / (n_iter + 1) # Batch수로 나누어주어 batch마다 걸리는 시간 측정
         if cfg.MODEL.DIST_TRAIN:
