@@ -181,6 +181,7 @@ class build_transformer(nn.Module): # nn.Module 상속
 
         self.num_classes = num_classes
         self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
+        self.METRIC_LOSS_TYPE = cfg.MODEL.METRIC_LOSS_TYPE
         # Loss_type : arcface, cosface, amsoftmax, circleloss 등의 metric_learning은 classifier의 weight를 통해서 구현됨
         # nn.Module을 상속받는 class로 구현
         if self.ID_LOSS_TYPE == 'arcface':
@@ -215,8 +216,12 @@ class build_transformer(nn.Module): # nn.Module 상속
                 feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                 cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
             else:
-                feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
-                cls_score = self.classifier(feat)
+                if self.METRIC_LOSS_TYPE == 'hnewth_patch':
+                    feat = self.bottleneck(global_feat[:,0,:]) # base model을 통과한 feature를 bottleneck layer에 통과
+                    cls_score = self.classifier(feat)
+                else :
+                    feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
+                    cls_score = self.classifier(feat)
             # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
             # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
             return cls_score, global_feat  # global feature for triplet loss

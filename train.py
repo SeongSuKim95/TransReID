@@ -45,7 +45,7 @@ if __name__ == '__main__':
     if cfg.MODEL.DIST_TRAIN:
         torch.cuda.set_device(args.local_rank)
 
-    output_dir = cfg.OUTPUT_DIR
+    output_dir = cfg.OUTPUT_DIR + "/" + str(cfg.INDEX)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 

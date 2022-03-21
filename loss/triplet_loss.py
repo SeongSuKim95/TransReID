@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from typing import Optional, Tuple
 import torch.nn.functional as F
-
+import sys
 def normalize_max(x, axis=-1):
     """Normalizing to unit length along the specified dimension.
     Args:
@@ -51,6 +51,22 @@ def cosine_dist(x, y):
       y: pytorch Variable, with shape [n, d]
     Returns:
       dist: pytorch Variable, with shape [m, n]
+    """
+    m, n = x.size(0), y.size(0)
+    x_norm = torch.pow(x, 2).sum(1, keepdim=True).sqrt().expand(m, n)
+    y_norm = torch.pow(y, 2).sum(1, keepdim=True).sqrt().expand(n, m).t()
+    xy_intersection = torch.mm(x, y.t())
+    dist = xy_intersection/(x_norm * y_norm)
+    dist = (1. - dist) / 2
+    return dist
+
+def patchwise_dist(x,y):
+    """
+    Args:
+      x: pytorch Variable, with shape [m, d]
+      y: pytorch Variable, with shape [m, d]
+    Returns:
+      dist: pytorch Variable, with shape [m]
     """
     m, n = x.size(0), y.size(0)
     x_norm = torch.pow(x, 2).sum(1, keepdim=True).sqrt().expand(m, n)
@@ -256,12 +272,13 @@ class TripletAttentionLoss(object):
         cls_param: torch.Tensor,
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        
         if normalize_feature:
             global_feat = normalize_max(global_feat, axis=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
 
         #dist_mat = cosine_distance(global_feat,global_feat)
-        (
+        ( 
             dist_ap,
             dist_an,
             dist_an_mean,
@@ -311,7 +328,7 @@ class TripletAttentionLoss(object):
                 + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
             )
         if torch.isnan(Triplet_loss):
-            print("d")
+            sys.exit("Gradient Exploded")
 
         return Triplet_loss,HTH,TH,HNTH_P2 
 
@@ -351,9 +368,11 @@ class TripletPatchAttentionLoss(object):
         cls_param: torch.Tensor,
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        cls_feat = global_feat[:,0,:]
+
         if normalize_feature:
-            global_feat = normalize_max(global_feat, axis=-1)
-        dist_mat = euclidean_dist(global_feat, global_feat)
+            cls_feat = normalize_max(cls_feat, axis=-1)
+        dist_mat = euclidean_dist(cls_feat, cls_feat)
 
         #dist_mat = cosine_distance(global_feat,global_feat)
         (
@@ -363,7 +382,7 @@ class TripletPatchAttentionLoss(object):
             ind_pos,
             ind_neg,
         ) = hard_example_mining_with_inds(dist_mat, labels)
-        neg_weight = self.weight(ind_neg, cls_param.detach(), labels) # weight abs차의 normalize 값이 threshold 보다 작으면 0 
+        neg_weight = self.weight(ind_neg, global_feat.detach(), cls_param ,labels) # weight abs차의 normalize 값이 threshold 보다 작으면 0 
         # neg_weight --> BoT : [64,2048] , ViT : [64, 768]
         # global_feat --> [64,2048] 
         # Euclidean distance between Weighted feature of Anchor & negative, positive
@@ -411,7 +430,7 @@ class TripletPatchAttentionLoss(object):
         return Triplet_loss,HTH,TH,HNTH_P2 
 
     def weight(
-        self, ind_neg: torch.Tensor, param: torch.Tensor, target: torch.Tensor
+        self, ind_neg: torch.Tensor, global_feat : torch.Tensor, param: torch.Tensor, target: torch.Tensor
     ) -> torch.Tensor: # target = labels
         t = 0.1
         weight_neg1 = param[target] # 각 sample ID의 weight vector [64,768]
@@ -421,5 +440,10 @@ class TripletPatchAttentionLoss(object):
         weight_neg = weight_neg / (max + 1e-12) # 큰값으로 normalize
         weight_neg[weight_neg < t] = -self.weight_param 
         weight_neg = weight_neg + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+
+        # weight_neg_patch1 = global_feat[target,1:,:]
+        # weight_neg_patch2 = global_feat[target[ind_neg],1:,:]
+        # test = torch.mul(weight_neg_patch1,weight_neg_patch2)
+        # dist_mat = patchwise_dist(global_feat, global_feat)
 
         return weight_neg

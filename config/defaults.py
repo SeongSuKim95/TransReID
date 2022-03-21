@@ -114,6 +114,8 @@ _C.DATALOADER.NUM_INSTANCE = 16
 _C.SOLVER = CN()
 # Name of optimizer
 _C.SOLVER.OPTIMIZER_NAME = "Adam"
+# Name of scheduler
+_C.SOLVER.SCHEDULER_NAME = "cos"
 # Number of max epoches
 _C.SOLVER.MAX_EPOCHS = 100
 # Base learning rate

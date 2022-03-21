@@ -6,7 +6,7 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import TripletLoss, TripletAttentionLoss
+from .triplet_loss import TripletLoss, TripletAttentionLoss, TripletPatchAttentionLoss
 from .center_loss import CenterLoss
 import torch
 from typing import Tuple
@@ -34,10 +34,10 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
     elif cfg.MODEL.METRIC_LOSS_TYPE == "hnewth_patch":
         if cfg.MODEL.NO_MARGIN:
-            triplet = TripletAttentionLoss()
+            triplet = TripletPatchAttentionLoss()
             print("using element weighted triplet loss for training")
         else :
-            triplet = TripletAttentionLoss(cfg.SOLVER.MARGIN)
+            triplet = TripletPatchAttentionLoss(cfg.SOLVER.MARGIN)
             print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
     else:
         print('expected METRIC_LOSS_TYPE should be triplet/hnewth/hnewth_patch''but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
