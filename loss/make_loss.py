@@ -126,7 +126,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, HTH, TH, HNTH_P2
     
         elif cfg.MODEL.METRIC_LOSS_TYPE == 'hnewth_patch':
-            def loss_func(score, feat, target, target_cam, cls_param):
+            def loss_func(score, feat, target, target_cam):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
                     if isinstance(score, list): 
                         ID_LOSS = [xent(scor, target) for scor in score[1:]]
@@ -136,11 +136,11 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         ID_LOSS = xent(score, target) # LabelSmooth
 
                     if isinstance(feat, list):
-                        TRI_LOSS = [triplet(feats, target, cls_param)[0] for feats in feat[1:]] # Equation (4)
+                        TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]] # Equation (4)
                         TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
-                        TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target, cls_param)[0]
+                        TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                        TRI_LOSS = triplet(feat, target, cls_param)[0]
+                        TRI_LOSS = triplet(feat, target)
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
@@ -153,14 +153,14 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         ID_LOSS = F.cross_entropy(score, target)
 
                     if isinstance(feat, list): 
-                            TRI_LOSS = [triplet(feats, target, cls_param)[0] for feats in feat[1:]]
+                            TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]]
                             TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
-                            TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target, cls_param)[0]
+                            TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                            TRI_LOSS, HTH, TH, HNTH_P2  = triplet(feat, target, cls_param)
+                            TRI_LOSS = triplet(feat, target)
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
-                            cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, HTH, TH, HNTH_P2
+                            cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
         else:
             print('expected METRIC_LOSS_TYPE should be triplet, hnewth, hnewth_patch''but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
     else:

@@ -217,7 +217,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                 cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
             else:
                 if self.METRIC_LOSS_TYPE == 'hnewth_patch':
-                    feat = self.bottleneck(global_feat[:,0,:]) # base model을 통과한 feature를 bottleneck layer에 통과
+                    feat = self.bottleneck(global_feat[:,0]) # base model을 통과한 feature를 bottleneck layer에 통과
                     cls_score = self.classifier(feat)
                 else :
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과

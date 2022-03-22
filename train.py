@@ -23,7 +23,7 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = True
 
 if __name__ == '__main__':
-
+    #os.environ['CUDA_LAUNCH_BLOCKING'] = "0"
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
         "--config_file", default="", help="path to config file", type=str

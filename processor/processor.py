@@ -25,7 +25,7 @@ def do_train(cfg,
              num_query, local_rank):
     if cfg.WANDB : 
         wandb.init(project="TransReID", entity="panda0728")
-        wandb.watch(model,loss_fn, log = "all", log_freq = 1)
+        #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
 
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
@@ -84,7 +84,7 @@ def do_train(cfg,
                 elif triplet_type == 'hnewth':
                     loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
                 elif triplet_type =='hnewth_patch':
-                    loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
+                    loss = loss_fn(score, feat, target, target_cam)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -102,7 +102,7 @@ def do_train(cfg,
                 acc = (score.max(1)[1] == target).float().mean()
 
             loss_meter.update(loss.item(), img.shape[0])
-            if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE:
+            if triplet_type == 'hnewth':
                 loss_HTH_meter.update(HTH.item(), img.shape[0])
                 loss_TH_meter.update(TH.item(), img.shape[0])
                 loss_HNTH_P2_meter.update(HNTH_P2.item(), img.shape[0])
@@ -115,7 +115,7 @@ def do_train(cfg,
                             .format(epoch, (n_iter + 1), len(train_loader),
                                     loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
-                    if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE:
+                    if triplet_type == 'hnewth':
                         wandb.log({ 'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 
                                     'HTH' : loss_HTH_meter.avg, 
@@ -167,7 +167,10 @@ def do_train(cfg,
                         img = img.to(device)
                         camids = camids.to(device)
                         target_view = target_view.to(device)
-                        feat = model(img, cam_label=camids, view_label=target_view)
+                        if triplet_type == "hnewth_patch":
+                            feat = model(img, cam_label=camids, view_label=target_view)[:,0]
+                        else :
+                            feat = model(img, cam_label=camids, view_label=target_view)
                         evaluator.update((feat, vid, camid))
                 cmc, mAP, _, _, _, _, _, _, _, _, _, _  = evaluator.compute()
                 logger.info("Validation Results - Epoch: {}".format(epoch))
