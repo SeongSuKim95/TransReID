@@ -401,7 +401,8 @@ class TripletPatchAttentionLoss(object):
             # HTH = self.ranking_loss(dist_an.detach(), dist_ap, y)
             # TH =  self.ranking_loss(dist_neg,dist_pos,y)
             # HNTH_P2 = self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
-            
+            # Triplet_loss = HTH + TH + HNTH_P2
+
             # NEWTH
             # loss = HTH + TH + HNTH_P2
             
@@ -419,24 +420,23 @@ class TripletPatchAttentionLoss(object):
             # loss = self.ranking_loss(dist_an.detach(), dist_ap, y) 
             
             # TH
-            loss = self.ranking_loss(dist_neg, dist_pos, y) 
+            Triplet_loss = self.ranking_loss(dist_neg, dist_pos, y) 
+            
         else:
-            loss = self.ranking_loss(dist_neg, dist_pos, y) 
+            Triplet_loss = self.ranking_loss(dist_neg - dist_pos, y) 
 
             # Triplet_loss = (
             #     self.ranking_loss(dist_an.detach() - dist_ap, y)
             #     + self.ranking_loss(dist_neg - dist_pos, y)
             #     + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
             # )
-        if torch.isnan(loss):
-            print("d")
 
-        return loss
+        return Triplet_loss
 
     def weight(
         self, ind_neg: torch.Tensor, global_feat : torch.Tensor
     ) -> torch.Tensor: # target = labels
-        t = 0.1
+
         # weight_neg1 = param[target] # 각 sample ID의 weight vector [64,768]
         # weight_neg2 = param[target[ind_neg]] # 각 sample ID와 가장 먼 sample ID의 weight vector
         # weight_neg = torch.abs(weight_neg1 - weight_neg2) # 둘의 차이, [64,2048]
@@ -458,12 +458,20 @@ class TripletPatchAttentionLoss(object):
         acos_max, _ = torch.max(acos,dim=1,keepdim=True)
         acos_norm = acos / (acos_max + 1e-12)
         neg_weight = acos_norm.unsqueeze(-1)
+        
+        # Need to fix
+
+        # Euclidean_distance_weight
+        dist = torch.norm(torch.abs(weight_neg_patch1 - weight_neg_patch2),p=2,dim=-1)
+        max, _ = torch.max(dist, dim = 1 ,keepdim = True)
+        dist  = dist / (max + 1e-12)
+        _, idx = dist.sort(dim=1)
+        dist[idx<idx.shape[1]*0] = -self.weight_param
+        dist = dist + self.weight_param
+        # dist = dist - self.weight_param
+        neg_weight = dist.unsqueeze(-1)
+        # For numerical stability
         # 나중에 해보기
         # acos_norm[acos_norm<t] = -self.weight_param
         # acos_norm = acos_norm + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-
-        # Eucd_distance_Weight
-        # Eucd = torch.norm(torch.abs(weight_neg_patch1 - weight_neg_patch2),p=2,dim=-1)
-        # max = torch.max()
-
         return neg_weight
