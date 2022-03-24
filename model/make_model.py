@@ -166,11 +166,17 @@ class build_transformer(nn.Module): # nn.Module 상속
             view_num = 0
 
         # backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
-        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, sie_xishu=cfg.MODEL.SIE_COE,
-                                                        camera=camera_num, view=view_num, stride_size=cfg.MODEL.STRIDE_SIZE, drop_path_rate=cfg.MODEL.DROP_PATH,
+        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                        sie_xishu=cfg.MODEL.SIE_COE,
+                                                        camera=camera_num,
+                                                        view=view_num,
+                                                        stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                        drop_path_rate=cfg.MODEL.DROP_PATH,
                                                         drop_rate= cfg.MODEL.DROP_OUT,
                                                         attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
-                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE)
+                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                        ml = cfg.MODEL.ML)
+                                                        
         if cfg.MODEL.TRANSFORMER_TYPE == 'deit_small_patch16_224_TransReID':
             self.in_planes = 384
         if pretrain_choice == 'imagenet':
@@ -271,7 +277,15 @@ class build_transformer_local(nn.Module):
         else:
             view_num = 0
 
-        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, sie_xishu=cfg.MODEL.SIE_COE, local_feature=cfg.MODEL.JPM, camera=camera_num, view=view_num, stride_size=cfg.MODEL.STRIDE_SIZE, drop_path_rate=cfg.MODEL.DROP_PATH)
+        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                        sie_xishu=cfg.MODEL.SIE_COE,
+                                                        local_feature=cfg.MODEL.JPM,
+                                                        camera=camera_num,
+                                                        view=view_num,
+                                                        stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                        drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                        ml = cfg.MODEL.ML)
 
         if pretrain_choice == 'imagenet':
             self.base.load_param(model_path)
@@ -419,6 +433,110 @@ class build_transformer_local(nn.Module):
             self.state_dict()[i].copy_(param_dict[i])
         print('Loading pretrained model for finetuning from {}'.format(model_path))
 
+class build_transformer_ml(nn.Module):
+    def __init__(self, num_classes, camera_num, view_num, cfg, factory):
+        super(build_transformer_ml, self).__init__()
+        model_path = cfg.MODEL.PRETRAIN_PATH
+        pretrain_choice = cfg.MODEL.PRETRAIN_CHOICE
+        self.cos_layer = cfg.MODEL.COS_LAYER
+        self.neck = cfg.MODEL.NECK
+        self.neck_feat = cfg.TEST.NECK_FEAT
+        self.in_planes = 768
+
+        print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
+
+        if cfg.MODEL.SIE_CAMERA:
+            camera_num = camera_num
+        else:
+            camera_num = 0
+
+        if cfg.MODEL.SIE_VIEW:
+            view_num = view_num
+        else:
+            view_num = 0
+
+        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, 
+                                                        sie_xishu=cfg.MODEL.SIE_COE,
+                                                        local_feature=cfg.MODEL.JPM,
+                                                        camera=camera_num,
+                                                        view=view_num,
+                                                        stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                        drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                        ml = cfg.MODEL.ML)
+
+        if pretrain_choice == 'imagenet':
+            self.base.load_param(model_path)
+            print('Loading pretrained ImageNet model......from {}'.format(model_path))
+
+        block = self.base.blocks[-1] # Last encoder layer
+        layer_norm = self.base.norm
+        self.ID_branch = nn.Sequential(
+            copy.deepcopy(block),
+            copy.deepcopy(layer_norm)
+        )
+        self.Metric_branch = self.base.ml_blocks
+
+        self.num_classes = num_classes
+        self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
+        if self.ID_LOSS_TYPE == 'arcface':
+            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
+            self.classifier = Arcface(self.in_planes, self.num_classes,
+                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
+        elif self.ID_LOSS_TYPE == 'cosface':
+            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
+            self.classifier = Cosface(self.in_planes, self.num_classes,
+                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
+        elif self.ID_LOSS_TYPE == 'amsoftmax':
+            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
+            self.classifier = AMSoftmax(self.in_planes, self.num_classes,
+                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
+        elif self.ID_LOSS_TYPE == 'circle':
+            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
+            self.classifier = CircleLoss(self.in_planes, self.num_classes,
+                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
+        else:
+            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+            self.classifier.apply(weights_init_classifier)
+
+        self.bottleneck = nn.BatchNorm1d(self.in_planes)
+        self.bottleneck.bias.requires_grad_(False)
+        self.bottleneck.apply(weights_init_kaiming)
+
+    def forward(self, x, label=None, cam_label= None, view_label=None):  # label is unused if self.cos_layer == 'no'
+
+        features = self.base(x, cam_label=cam_label, view_label=view_label) # features.shape = [bs, #patch + 1, feat_dim]
+
+        # global branch
+        ID_feat = self.ID_branch(features) # self.b1 = last layer + layer_norm
+        global_feat = ID_feat[:, 0] # cls_token feature, [bs, feat_dim]
+        feat = self.bottleneck(global_feat)
+
+        if self.training:
+            if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
+                cls_score = self.classifier(feat, label)
+            else:
+                cls_score = self.classifier(feat)
+                triplet_feature = self.Metric_branch(features,label)
+            return cls_score, global_feat  # global feature for triplet loss
+        else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
+            if self.neck_feat == 'after':
+                return feat
+            else:
+                return global_feat
+
+    def load_param(self, trained_path):
+        param_dict = torch.load(trained_path)
+        for i in param_dict:
+            self.state_dict()[i.replace('module.', '')].copy_(param_dict[i])
+        print('Loading pretrained model from {}'.format(trained_path))
+
+    def load_param_finetune(self, model_path):
+        param_dict = torch.load(model_path)
+        for i in param_dict:
+            self.state_dict()[i].copy_(param_dict[i])
+        print('Loading pretrained model for finetuning from {}'.format(model_path))
+
 
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
@@ -432,10 +550,15 @@ def make_model(cfg, num_class, camera_num, view_num):
         if cfg.MODEL.JPM:
             model = build_transformer_local(num_class, camera_num, view_num, cfg, __factory_T_type, rearrange=cfg.MODEL.RE_ARRANGE)
             print('===========building transformer with JPM module ===========')
-        else:
-            model = build_transformer(num_class, camera_num, view_num, cfg, __factory_T_type)
-            print('===========building transformer===========')
+        else: 
+            if cfg.MODEL.ML: 
+                model = build_transformer_ml(num_class, camera_num, view_num, cfg, __factory_T_type)
+                print('===========building transformer for metric learning===========')
+            else :    
+                model = build_transformer(num_class, camera_num, view_num, cfg, __factory_T_type)
+                print('===========building transformer===========')
     else:
         model = Backbone(num_class, cfg)
         print('===========building ResNet===========')
     return model
+

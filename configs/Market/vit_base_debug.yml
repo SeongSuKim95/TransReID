@@ -6,10 +6,11 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: False
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
-
+  ML : True
+  
 INPUT:
   SIZE_TRAIN: [256, 128]
   SIZE_TEST: [256, 128]

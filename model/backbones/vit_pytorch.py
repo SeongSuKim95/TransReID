@@ -163,9 +163,82 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
+class Cross_Attention(nn.Module):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+        self.scale = qk_scale or head_dim ** -0.5
+
+        self.A = nn.Linear(dim,dim,bias=qkv_bias)
+        self.P = nn.Linear(dim,dim*2,bias=qkv_bias)
+        self.N = nn.Linear(dim,dim*2,bias=qkv_bias)
+        self.PN_V = nn.Linear(dim, dim * 2, bias=qkv_bias)
+
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+        self.gap = nn.AdaptiveAvgPool2d
+
+    def forward(self, anchor, positive, negative):
+        B, N, C = anchor.shape
+
+        Anchor_Q = self.A(anchor).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) # 64, 128 1, 12, 768/12=64
+        Positive_KV = self.P(positive).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        Negative_KV = self.N(negative).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        
+        Positive_K, Positive_V = Positive_KV[0], Positive_KV[1]
+        Negative_K, Negative_V = Negative_KV[0], Negative_KV[1]
+        
+        Positive_attn = (Anchor_Q * Positive_K.transpose(-2, -1)) * self.scale
+        Positive_attn = Positive_attn.softmax(dim=-1) 
+        Positive_attn = self.attn_drop(Positive_attn)
+
+        Negative_attn = (Anchor_Q * Negative_K.transpose(-2, -1)) * self.scale
+        Negative_attn = Negative_attn.softmax(dim=-1)
+        Negative_attn = self.attn_drop(Negative_attn)
+
+        Positive = self.gap(Positive_attn * Positive_V)
+        Negative = self.gap(Negative_attn * Negative_V)
+
+        x = torch.cat((Anchor_Q,Positive,Negative),dim = 1)
+        # x = self.proj(x)
+        # x = self.proj_drop(x)
+        return x
+
+class ML_Block(nn.Module):
+    # Attention Block
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.norm_A = norm_layer(dim)
+        self.norm_P = norm_layer(dim)
+        self.norm_N = norm_layer(dim)
+
+        self.attn = Cross_Attention(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
+        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        # drop out 추가해 줄 필요 있음
+    def forward(self, x, labels):
+        
+        dist_mat = euclidean_dist(x[:,0], x[:,0])
+        _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
+        
+        A = x[:,1:]
+        P = x[p_inds,1:]
+        N = x[n_inds,1:]
+
+        A = self.norm_A(A)
+        P = self.norm_P(P)
+        N = self.norm_N(N)
+        x = self.attn(A,P,N)
+
+        return x
 
 class Block(nn.Module):
-    # Attention Block
+    # Cross_Attention Block
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
@@ -182,8 +255,6 @@ class Block(nn.Module):
         x = x + self.drop_path(self.attn(self.norm1(x))) # Residual connection
         x = x + self.drop_path(self.mlp(self.norm2(x))) # Residual connection
         return x
-
-
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
@@ -314,6 +385,7 @@ class TransReID(nn.Module):
         self.view_num = view
         self.sie_xishu = sie_xishu
         self.loss_type = kwargs['loss_type']
+        self.ml = kwargs['ml']
         # MSMT 17 = {Cam : 15}
         # Market-1501 = {Cam : 6}
         # DukeMTMC-reID = {Cam : 8}
@@ -351,6 +423,10 @@ class TransReID(nn.Module):
             for i in range(depth)])
 
         self.norm = norm_layer(embed_dim)
+        
+        # Metric Learning Cross-Attention
+        self.ml_blocks = ML_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                drop=drop_rate, attn_drop=attn_drop_rate)
 
         # Classifier head
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
@@ -408,7 +484,7 @@ class TransReID(nn.Module):
 
             x = self.norm(x)
             
-            if self.loss_type == "hnewth_patch":
+            if self.loss_type == "hnewth_patch" or self.ml:
                 return x
             else :
                 return x[:, 0]
@@ -540,3 +616,76 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
         >>> nn.init.trunc_normal_(w)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
+
+def euclidean_dist(x, y):
+    """
+    Args:
+      x: pytorch Variable, with shape [m, d]
+      y: pytorch Variable, with shape [n, d]
+    Returns:
+      dist: pytorch Variable, with shape [m, n]
+    """
+    m, n = x.size(0), y.size(0)
+    xx = torch.pow(x, 2).sum(1, keepdim=True).expand(m, n)
+    yy = torch.pow(y, 2).sum(1, keepdim=True).expand(n, m).t()
+    dist = xx + yy
+    dist = dist - 2 * torch.matmul(x, y.t())
+    # dist.addmm_(1, -2, x, y.t())
+    dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
+    return dist
+
+
+def hard_example_mining(dist_mat, labels, return_inds=False):
+    """For each anchor, find the hardest positive and negative sample.
+    Args:
+      dist_mat: pytorch Variable, pair wise distance between samples, shape [N, N]
+      labels: pytorch LongTensor, with shape [N]
+      return_inds: whether to return the indices. Save time if `False`(?)
+    Returns:
+      dist_ap: pytorch Variable, distance(anchor, positive); shape [N]
+      dist_an: pytorch Variable, distance(anchor, negative); shape [N]
+      p_inds: pytorch LongTensor, with shape [N];
+        indices of selected hard positive samples; 0 <= p_inds[i] <= N - 1
+      n_inds: pytorch LongTensor, with shape [N];
+        indices of selected hard negative samples; 0 <= n_inds[i] <= N - 1
+    NOTE: Only consider the case in which all labels have same num of samples,
+      thus we can cope with all anchors in parallel.
+    """
+
+    assert len(dist_mat.size()) == 2
+    assert dist_mat.size(0) == dist_mat.size(1)
+    N = dist_mat.size(0)
+
+    # shape [N, N]
+    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
+    is_neg = labels.expand(N, N).ne(labels.expand(N, N).t())
+
+    # `dist_ap` means distance(anchor, positive)
+    # both `dist_ap` and `relative_p_inds` with shape [N, 1]
+    dist_ap, relative_p_inds = torch.max(
+        dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True)
+    # print(dist_mat[is_pos].shape)
+    # `dist_an` means distance(anchor, negative)
+    # both `dist_an` and `relative_n_inds` with shape [N, 1]
+    dist_an, relative_n_inds = torch.min(
+        dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True)
+    # shape [N]
+    dist_ap = dist_ap.squeeze(1)
+    dist_an = dist_an.squeeze(1)
+
+    if return_inds:
+        # shape [N, N]
+        ind = (labels.new().resize_as_(labels)
+               .copy_(torch.arange(0, N).long())
+               .unsqueeze(0).expand(N, N))
+        # shape [N, 1]
+        p_inds = torch.gather(
+            ind[is_pos].contiguous().view(N, -1), 1, relative_p_inds.data)
+        n_inds = torch.gather(
+            ind[is_neg].contiguous().view(N, -1), 1, relative_n_inds.data)
+        # shape [N]
+        p_inds = p_inds.squeeze(1)
+        n_inds = n_inds.squeeze(1)
+        return dist_ap, dist_an, p_inds, n_inds
+
+    return dist_ap, dist_an

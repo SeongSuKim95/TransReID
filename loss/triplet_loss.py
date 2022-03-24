@@ -368,7 +368,8 @@ class TripletPatchAttentionLoss(object):
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
-        cls_feat = global_feat[:,0].detach() 
+        cls_feat = global_feat[:,0]
+        
         patch_feat = global_feat[:,1:]
         if normalize_feature:
             cls_feat = normalize_max(cls_feat, axis=-1)
@@ -466,7 +467,7 @@ class TripletPatchAttentionLoss(object):
         max, _ = torch.max(dist, dim = 1 ,keepdim = True)
         dist  = dist / (max + 1e-12)
         _, idx = dist.sort(dim=1)
-        dist[idx<idx.shape[1]*0] = -self.weight_param
+        dist[idx<idx.shape[1]*0.5] = -self.weight_param
         dist = dist + self.weight_param
         # dist = dist - self.weight_param
         neg_weight = dist.unsqueeze(-1)
