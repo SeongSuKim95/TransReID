@@ -169,8 +169,8 @@ class Cross_Attention(nn.Module):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim ** -0.5
-
+        # self.scale = qk_scale or head_dim ** -0.5
+        self.stride = 16
         self.A = nn.Linear(dim,dim,bias=qkv_bias)
         self.P = nn.Linear(dim,dim*2,bias=qkv_bias)
         self.N = nn.Linear(dim,dim*2,bias=qkv_bias)
@@ -179,33 +179,43 @@ class Cross_Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.gap = nn.AdaptiveAvgPool2d
 
     def forward(self, anchor, positive, negative):
         B, N, C = anchor.shape
 
-        Anchor_Q = self.A(anchor).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) # 64, 128 1, 12, 768/12=64
-        Positive_KV = self.P(positive).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        Negative_KV = self.N(negative).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        
+        # Anchor_Q = self.A(anchor).reshape(B, N, 1, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) # 64, 128 1, 12, 768/12=64
+        # Positive_KV = self.P(positive).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        # Negative_KV = self.N(negative).reshape(B, N, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        Anchor_Q = self.A(anchor).reshape(B,N,1,C).permute(2,0,1,3)[0]
+        Positive_KV = self.P(positive).reshape(B,N,2,C).permute(2,0,1,3)
+        Negative_KV = self.N(negative).reshape(B,N,2,C).permute(2,0,1,3)
+
         Positive_K, Positive_V = Positive_KV[0], Positive_KV[1]
         Negative_K, Negative_V = Negative_KV[0], Negative_KV[1]
         
-        Positive_attn = (Anchor_Q * Positive_K.transpose(-2, -1)) * self.scale
-        Positive_attn = Positive_attn.softmax(dim=-1) 
-        Positive_attn = self.attn_drop(Positive_attn)
+        Positive_V = Positive_V.reshape(B,N,self.stride,C//self.stride)
+        Negative_V = Negative_V.reshape(B,N,self.stride,C//self.stride)
 
-        Negative_attn = (Anchor_Q * Negative_K.transpose(-2, -1)) * self.scale
-        Negative_attn = Negative_attn.softmax(dim=-1)
-        Negative_attn = self.attn_drop(Negative_attn)
+        #Positive_attn = torch.sum(Anchor_Q * Positive_K,dim=-1) / self.scale
+        Positive_Attn = Anchor_Q * Positive_K 
+        Negative_Attn = Anchor_Q * Negative_K
 
-        Positive = self.gap(Positive_attn * Positive_V)
-        Negative = self.gap(Negative_attn * Negative_V)
+        Positive_Attn = Positive_Attn.reshape(B,N,self.stride,C//self.stride)
+        Negative_Attn = Negative_Attn.reshape(B,N,self.stride,C//self.stride)
+        #Positive_attn = F.normalize(Positive_attn,p=1,dim=1) 
+        Positive_Attn = Positive_Attn.softmax(-1)
+        Negative_Attn = Negative_Attn.softmax(-1)
+ 
+        Anchor_Q = Anchor_Q.reshape(B,N,self.stride,C//self.stride)
 
-        x = torch.cat((Anchor_Q,Positive,Negative),dim = 1)
+        Anchor = (torch.mean(Anchor_Q,dim=-1)).view(B,-1)
+        Positive = (torch.mean(Positive_Attn * Positive_V,dim=-1)).view(B,-1)
+        Negative = (torch.mean(Negative_Attn * Negative_V,dim=-1)).view(B,-1)
+
+        # x = torch.cat((Anchor,Positive,Negative),dim = 1)
         # x = self.proj(x)
         # x = self.proj_drop(x)
-        return x
+        return Anchor, Positive, Negative
 
 class ML_Block(nn.Module):
     # Attention Block
@@ -233,9 +243,10 @@ class ML_Block(nn.Module):
         A = self.norm_A(A)
         P = self.norm_P(P)
         N = self.norm_N(N)
-        x = self.attn(A,P,N)
 
-        return x
+        A,P,N = self.attn(A,P,N)
+
+        return torch.stack((A,P,N))
 
 class Block(nn.Module):
     # Cross_Attention Block

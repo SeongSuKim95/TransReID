@@ -77,8 +77,6 @@ def do_train(cfg,
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
-                
-                
                 if triplet_type == 'triplet':
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type == 'hnewth':

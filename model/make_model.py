@@ -517,8 +517,8 @@ class build_transformer_ml(nn.Module):
                 cls_score = self.classifier(feat, label)
             else:
                 cls_score = self.classifier(feat)
-                triplet_feature = self.Metric_branch(features,label)
-            return cls_score, global_feat  # global feature for triplet loss
+                triplet_features = self.Metric_branch(features,label)
+            return cls_score, triplet_features  # triplet features for triplet loss
         else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
             if self.neck_feat == 'after':
                 return feat
