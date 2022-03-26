@@ -190,18 +190,13 @@ class Cross_Attention(nn.Module):
         Positive_KV = self.P(positive).reshape(B,N,2,C).permute(2,0,1,3)
         Negative_KV = self.N(negative).reshape(B,N,2,C).permute(2,0,1,3)
 
-        Positive_K, Positive_V = Positive_KV[0], Positive_KV[1]
-        Negative_K, Negative_V = Negative_KV[0], Negative_KV[1]
-        
-        Positive_V = Positive_V.reshape(B,N,self.stride,C//self.stride)
-        Negative_V = Negative_V.reshape(B,N,self.stride,C//self.stride)
+        Positive_K, Positive_V = Positive_KV[0], Positive_KV[1].reshape(B,N,self.stride,C//self.stride)
+        Negative_K, Negative_V = Negative_KV[0], Negative_KV[1].reshape(B,N,self.stride,C//self.stride)
 
         #Positive_attn = torch.sum(Anchor_Q * Positive_K,dim=-1) / self.scale
-        Positive_Attn = Anchor_Q * Positive_K 
-        Negative_Attn = Anchor_Q * Negative_K
+        Positive_Attn = (Anchor_Q * Positive_K).reshape(B,N,self.stride,C//self.stride)
+        Negative_Attn = (Anchor_Q * Negative_K).reshape(B,N,self.stride,C//self.stride)
 
-        Positive_Attn = Positive_Attn.reshape(B,N,self.stride,C//self.stride)
-        Negative_Attn = Negative_Attn.reshape(B,N,self.stride,C//self.stride)
         #Positive_attn = F.normalize(Positive_attn,p=1,dim=1) 
         Positive_Attn = Positive_Attn.softmax(-1)
         Negative_Attn = Negative_Attn.softmax(-1)
@@ -209,6 +204,7 @@ class Cross_Attention(nn.Module):
         Anchor_Q = Anchor_Q.reshape(B,N,self.stride,C//self.stride)
 
         Anchor = (torch.mean(Anchor_Q,dim=-1)).view(B,-1)
+
         Positive = (torch.mean(Positive_Attn * Positive_V,dim=-1)).view(B,-1)
         Negative = (torch.mean(Negative_Attn * Negative_V,dim=-1)).view(B,-1)
 
@@ -232,8 +228,8 @@ class ML_Block(nn.Module):
         # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         # drop out 추가해 줄 필요 있음
     def forward(self, x, labels):
-        
-        dist_mat = euclidean_dist(x[:,0], x[:,0])
+        cls_feat = x[:,0].detach()
+        dist_mat = euclidean_dist(cls_feat, cls_feat)
         _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
         
         A = x[:,1:]
@@ -390,8 +386,11 @@ class TransReID(nn.Module):
 
         num_patches = self.patch_embed.num_patches
 
+        #CLS token은 한개
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        #Positional embedding은 patch마다 한개
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
@@ -495,7 +494,7 @@ class TransReID(nn.Module):
 
             x = self.norm(x)
             
-            if self.loss_type == "hnewth_patch" or self.ml:
+            if self.loss_type == "hnewth_patch" or "triplet_ml":
                 return x
             else :
                 return x[:, 0]

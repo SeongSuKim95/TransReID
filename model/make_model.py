@@ -471,6 +471,7 @@ class build_transformer_ml(nn.Module):
 
         block = self.base.blocks[-1] # Last encoder layer
         layer_norm = self.base.norm
+
         self.ID_branch = nn.Sequential(
             copy.deepcopy(block),
             copy.deepcopy(layer_norm)
@@ -551,7 +552,7 @@ def make_model(cfg, num_class, camera_num, view_num):
             model = build_transformer_local(num_class, camera_num, view_num, cfg, __factory_T_type, rearrange=cfg.MODEL.RE_ARRANGE)
             print('===========building transformer with JPM module ===========')
         else: 
-            if cfg.MODEL.ML: 
+            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml': 
                 model = build_transformer_ml(num_class, camera_num, view_num, cfg, __factory_T_type)
                 print('===========building transformer for metric learning===========')
             else :    

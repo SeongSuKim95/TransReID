@@ -476,7 +476,7 @@ class TripletPatchAttentionLoss(object):
         # acos_norm[acos_norm<t] = -self.weight_param
         # acos_norm = acos_norm + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
         return neg_weight
-class Tripletbranchloss(object):
+class TripletBranchLoss(object):
     """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
@@ -488,9 +488,6 @@ class Tripletbranchloss(object):
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
             self.ranking_loss = nn.SoftMarginLoss()
-        self.weight_param = nn.Parameter(
-            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
-        )
 
     def __call__(
         self,
@@ -502,13 +499,13 @@ class Tripletbranchloss(object):
         
         Anchor = triplet_feat[0]
         Positive = triplet_feat[1]
-        Negative = triplet_feat[2]
+        Negative = triplet_feat[2] # Anchor의 scale이 더 큰 상황
 
         #dist_mat = cosine_distance(global_feat,global_feat)
 
-        dist_an = euclidean_dist(Anchor,Negative)
-        dist_ap = euclidean_dist(Anchor,Positive)
-        
+        dist_an = torch.norm((Anchor-Negative),p=2,dim=1)
+        dist_ap = torch.norm((Anchor-Positive),p=2,dim=1)
+
         y = dist_an.new().resize_as_(dist_an).fill_(1) # y.shape = 64
 
         if self.margin is not None:
@@ -516,4 +513,4 @@ class Tripletbranchloss(object):
         else:
             Triplet_loss = self.ranking_loss(dist_an - dist_ap, y) 
 
-        return Triplet_loss
+        return Triplet_loss, dist_ap, dist_an
