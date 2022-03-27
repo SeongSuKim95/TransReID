@@ -497,14 +497,15 @@ class TripletBranchLoss(object):
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
         
-        Anchor = triplet_feat[0]
-        Positive = triplet_feat[1]
-        Negative = triplet_feat[2] # Anchor의 scale이 더 큰 상황
+        Anchor_P = triplet_feat[0]
+        Anchor_N = triplet_feat[1]
+        Positive = triplet_feat[2]
+        Negative = triplet_feat[3] # Anchor의 scale이 더 큰 상황
 
-        #dist_mat = cosine_distance(global_feat,global_feat)
+        #dist_mat = cosine_distance(global_feat,global_feat) 
 
-        dist_an = torch.norm((Anchor-Negative),p=2,dim=1)
-        dist_ap = torch.norm((Anchor-Positive),p=2,dim=1)
+        dist_an = torch.norm((Anchor_N-Negative),p=2,dim=1)
+        dist_ap = torch.norm((Anchor_P-Positive),p=2,dim=1)
 
         y = dist_an.new().resize_as_(dist_an).fill_(1) # y.shape = 64
 
