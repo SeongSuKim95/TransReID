@@ -163,7 +163,7 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-class Cross_Attention(nn.Module):
+class Cross_Attention(nn.Module): # triplet_ml
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
@@ -219,6 +219,45 @@ class Cross_Attention(nn.Module):
         # x = self.proj(x)
         # x = self.proj_drop(x)
         return Anchor_P,Anchor_N,Positive,Negative
+class Cross_distance_patch(nn.Module): # triplet_ml_1
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+        # self.scale = qk_scale or head_dim ** -0.5
+        self.stride = 16
+        self.A = nn.Linear(dim,dim,bias=qkv_bias)
+        self.weight_param = nn.Parameter(
+            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
+        )
+        self.t = 0.1
+    def forward(self, feature, p_inds, n_inds):
+        
+        anchor = feature[:,1:]
+        positive = feature[p_inds,1:]
+        negative = feature[n_inds,1:]
+        B, N, C = anchor.shape # Batch, Patch, Channel
+
+        dist_neg = torch.norm(anchor - negative, p=2, dim=-1)# patch wise distance
+        dist_pos = torch.norm(anchor - positive, p=2, dim=-1)
+        weight = torch.abs(dist_neg - dist_pos)
+        weight_max, _ = torch.max(weight,dim=1,keepdim=True)
+        weight = weight/ (weight_max + 1e-12)
+        weight [weight < self.t] = -self.weight_param 
+        weight = weight + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+
+        # Anchor = self.A(anchor)
+        # Weighted_Anchor = Anchor * weight.unsqueeze(-1)
+        
+        Weighted_Anchor =  anchor * weight.unsqueeze(-1)
+        Weighted_Anchor = self.A(Weighted_Anchor)
+        
+        Weighted_Anchor = Weighted_Anchor.reshape(B,N,self.stride,C//self.stride)
+        
+        Anchor = (torch.mean(Weighted_Anchor,dim=-1)).view(B,-1)
+       
+        return Anchor
 
 class ML_Block(nn.Module):
     # Attention Block
@@ -231,6 +270,8 @@ class ML_Block(nn.Module):
 
         self.attn = Cross_Attention(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = Cross_distance_patch(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         # drop out 추가해 줄 필요 있음
@@ -238,19 +279,14 @@ class ML_Block(nn.Module):
         cls_feat = x[:,0].detach()
         dist_mat = euclidean_dist(cls_feat, cls_feat)
         _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
-        
-        A = x[:,1:]
-        P = x[p_inds,1:]
-        N = x[n_inds,1:]
-
         # A = self.norm_A(A)
         # P = self.norm_P(P)
         # N = self.norm_N(N)
-
-        AP,AN,P,N = self.attn(A,P,N)
-
-        return torch.stack((AP,AN,P,N))
-
+        # AP,AN,P,N = self.attn(A,P,N)
+        # return torch.stack((AP,AN,P,N))
+        
+        A = self.attn(x,p_inds,n_inds)
+        return A, p_inds, n_inds
 class Block(nn.Module):
     # Cross_Attention Block
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
@@ -450,7 +486,7 @@ class TransReID(nn.Module):
         trunc_normal_(self.cls_token, std=.02)
         trunc_normal_(self.pos_embed, std=.02)
 
-        self.apply(self._init_weights)
+        self.apply(self._init_weights) # Initialize weights
 
     def _init_weights(self, m): # Layer initialize
         if isinstance(m, nn.Linear):
@@ -503,7 +539,7 @@ class TransReID(nn.Module):
             
             if self.loss_type == "hnewth_patch" :
                 return x
-            elif self.loss_type == "triplet_ml" :
+            elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
                 return x
             elif self.loss_type == "triplet":
                 return x[:, 0]

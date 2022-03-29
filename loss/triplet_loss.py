@@ -515,3 +515,43 @@ class TripletBranchLoss(object):
             Triplet_loss = self.ranking_loss(dist_an - dist_ap, y) 
 
         return Triplet_loss, dist_ap, dist_an
+class TripletBranchLoss_1(object):
+    """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
+    Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
+    Loss for Person Re-Identification'."""
+
+    def __init__(self, margin: Optional[float] = None):
+        self.margin = margin
+        self.attn_loss = nn.MSELoss()
+        if margin is not None:
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        else:
+            self.ranking_loss = nn.SoftMarginLoss()
+
+    def __call__(
+        self,
+        triplet_feat: torch.Tensor,
+        p_inds: torch.Tensor,
+        n_inds: torch.Tensor,
+        labels: torch.Tensor,
+        normalize_feature: bool = False,
+    ) -> Tuple[torch.Tensor]:
+        #global_feat = global_feat.contiguous()
+        
+        Anchor = triplet_feat
+        Negative = triplet_feat[n_inds]
+        Positive = triplet_feat[p_inds]
+        
+        #dist_mat = cosine_distance(global_feat,global_feat) 
+
+        dist_an = torch.norm((Anchor-Negative),p=2,dim=1)
+        dist_ap = torch.norm((Anchor-Positive),p=2,dim=1)
+
+        y = dist_an.new().resize_as_(dist_an).fill_(1) # y.shape = 64
+
+        if self.margin is not None:
+            Triplet_loss = self.ranking_loss(dist_an, dist_ap, y) 
+        else:
+            Triplet_loss = self.ranking_loss(dist_an - dist_ap, y) 
+
+        return Triplet_loss, dist_ap, dist_an

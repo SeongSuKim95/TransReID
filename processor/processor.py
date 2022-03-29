@@ -71,14 +71,19 @@ def do_train(cfg,
             target_view = target_view.to(device)
             with amp.autocast(enabled=True):
                 # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
-                # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
-                score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
+                # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산                
+                if triplet_type == 'triplet_ml_1':
+                    score, feat, p_inds, n_inds = model(img, target, cam_label=target_cam, view_label=target_view)
+                else :
+                    score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
                 # JPM을 사용할 경우
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
                 if triplet_type == 'triplet' or triplet_type == 'triplet_ml':
                     loss = loss_fn(score, feat, target, target_cam)
+                elif triplet_type == 'triplet_ml_1':
+                    loss = loss_fn(score, feat, p_inds, n_inds, target, target_cam)
                 elif triplet_type == 'hnewth':
                     loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
                 elif triplet_type =='hnewth_patch':

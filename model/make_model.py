@@ -94,7 +94,6 @@ class Backbone(nn.Module):
             self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
 
-        self.gap = nn.AdaptiveAvgPool2d(1)
         self.num_classes = num_classes
 
         self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
@@ -442,7 +441,7 @@ class build_transformer_ml(nn.Module):
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
         self.in_planes = 768
-
+        self.ml_in_planes = 768 + 2048
         print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
 
         if cfg.MODEL.SIE_CAMERA:
@@ -497,8 +496,12 @@ class build_transformer_ml(nn.Module):
             self.classifier = CircleLoss(self.in_planes, self.num_classes,
                                         s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
         else:
-            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
-            self.classifier.apply(weights_init_classifier)
+            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml_1':
+                self.classifier_ml = nn.Linear(self.ml_in_planes,num_classes,bias=False)
+                self.classifier_ml.apply(weights_init_classifier)
+            else :
+                self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+                self.classifier.apply(weights_init_classifier)
 
         self.bottleneck = nn.BatchNorm1d(self.in_planes)
         self.bottleneck.bias.requires_grad_(False)
@@ -512,19 +515,22 @@ class build_transformer_ml(nn.Module):
         ID_feat = self.ID_branch(features) # self.b1 = last layer + layer_norm
         global_feat = ID_feat[:, 0] # cls_token feature, [bs, feat_dim]
         feat = self.bottleneck(global_feat)
-
+        triplet_feat, p_inds, n_inds = self.Metric_branch(features,label)
+         
+        feat_cat = torch.cat((feat,triplet_feat),dim=1)
+        
         if self.training:
             if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
                 cls_score = self.classifier(feat, label)
             else:
-                cls_score = self.classifier(feat)
-                triplet_features = self.Metric_branch(features,label)
-            return cls_score, triplet_features  # triplet features for triplet loss
+                cls_score = self.classifier_ml(feat_cat)
+                # triplet_features = self.Metric_branch(features,label)
+            return cls_score, feat_cat, p_inds, n_inds # triplet features for triplet loss
         else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
             if self.neck_feat == 'after':
-                return feat
+                return torch.cat((feat,triplet_feat),dim=1) # feat
             else:
-                return global_feat
+                return torch.cat((feat,triplet_feat),dim=1) # global feat
 
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
@@ -552,7 +558,7 @@ def make_model(cfg, num_class, camera_num, view_num):
             model = build_transformer_local(num_class, camera_num, view_num, cfg, __factory_T_type, rearrange=cfg.MODEL.RE_ARRANGE)
             print('===========building transformer with JPM module ===========')
         else: 
-            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml': 
+            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml' or cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml_1': 
                 model = build_transformer_ml(num_class, camera_num, view_num, cfg, __factory_T_type)
                 print('===========building transformer for metric learning===========')
             else :    
