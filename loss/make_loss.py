@@ -18,48 +18,49 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True) 
     # center loss는 parameter가 존재, nn.Module을 상속받는 class
     # center loss는 classifier단의 weight로 loss를 구하는 것이 아니라, 자체적인 parameter를 optimize하기 때문에 criterion을 따로 구성해야함   
-    if cfg.MODEL.METRIC_LOSS_TYPE == "triplet_ml":
-        if cfg.MODEL.NO_MARGIN:
-                triplet = TripletBranchLoss() # __call__ return : loss, dist_ap, dist_an
-                print("using soft triplet branch loss for training")
-        else:
-                triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
+    if "triplet" in sampler :
+        if cfg.MODEL.METRIC_LOSS_TYPE == "triplet_ml":
+            if cfg.MODEL.NO_MARGIN:
+                    triplet = TripletBranchLoss() # __call__ return : loss, dist_ap, dist_an
+                    print("using soft triplet branch loss for training")
+            else:
+                    triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
+                    print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
+                    # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
+                    # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
+        elif cfg.MODEL.METRIC_LOSS_TYPE == "triplet_ml_1":
+            if cfg.MODEL.NO_MARGIN:
+                    triplet = TripletBranchLoss_1() # __call__ return : loss, dist_ap, dist_an
+                    print("using soft triplet branch loss for training")
+            else:
+                    triplet = TripletBranchLoss_1(cfg.SOLVER.MARGIN)  # triplet loss
+                    print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
+                    # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
+                    # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
+        elif cfg.MODEL.METRIC_LOSS_TYPE == "triplet":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletLoss() # __call__ return : loss, dist_ap, dist_an
+                print("using soft triplet loss for training")
+            else:
+                triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
                 print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-                # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
-                # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
-    elif cfg.MODEL.METRIC_LOSS_TYPE == "triplet_ml_1":
-        if cfg.MODEL.NO_MARGIN:
-                triplet = TripletBranchLoss_1() # __call__ return : loss, dist_ap, dist_an
-                print("using soft triplet branch loss for training")
+        elif cfg.MODEL.METRIC_LOSS_TYPE == "hnewth":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss()
+                print("using element weighted triplet loss for training")
+            else :
+                triplet = TripletAttentionLoss(cfg.SOLVER.MARGIN)
+                print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
+        elif cfg.MODEL.METRIC_LOSS_TYPE == "hnewth_patch":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletPatchAttentionLoss()
+                print("using element weighted triplet loss for training")
+            else :
+                triplet = TripletPatchAttentionLoss(cfg.SOLVER.MARGIN)
+                print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
         else:
-                triplet = TripletBranchLoss_1(cfg.SOLVER.MARGIN)  # triplet loss
-                print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-                # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
-                # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
-    elif cfg.MODEL.METRIC_LOSS_TYPE == "triplet":
-        if cfg.MODEL.NO_MARGIN:
-            triplet = TripletLoss() # __call__ return : loss, dist_ap, dist_an
-            print("using soft triplet loss for training")
-        else:
-            triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
-            print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-    elif cfg.MODEL.METRIC_LOSS_TYPE == "hnewth":
-        if cfg.MODEL.NO_MARGIN:
-            triplet = TripletAttentionLoss()
-            print("using element weighted triplet loss for training")
-        else :
-            triplet = TripletAttentionLoss(cfg.SOLVER.MARGIN)
-            print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-    elif cfg.MODEL.METRIC_LOSS_TYPE == "hnewth_patch":
-        if cfg.MODEL.NO_MARGIN:
-            triplet = TripletPatchAttentionLoss()
-            print("using element weighted triplet loss for training")
-        else :
-            triplet = TripletPatchAttentionLoss(cfg.SOLVER.MARGIN)
-            print("using element weighted triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-    else:
-        print('expected METRIC_LOSS_TYPE should be triplet/hnewth/hnewth_patch''but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
-    
+            print('expected METRIC_LOSS_TYPE should be triplet/hnewth/hnewth_patch''but got {}'.format(cfg.MODEL.METRIC_LOSS_TYPE))
+        
     if cfg.MODEL.IF_LABELSMOOTH == 'on':
         xent = CrossEntropyLabelSmooth(num_classes=num_classes)
         print("label smooth on, numclasses:", num_classes)

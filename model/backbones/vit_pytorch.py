@@ -258,18 +258,11 @@ class Cross_distance_patch(nn.Module): # triplet_ml_1
         Anchor = (torch.mean(Weighted_Anchor,dim=-1)).view(B,-1)
        
         return Anchor
-
-class ML_Block(nn.Module):
+class ML_Block_1(nn.Module):
     # Attention Block
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
-        self.norm_A = norm_layer(dim)
-        self.norm_P = norm_layer(dim)
-        self.norm_N = norm_layer(dim)
-
-        self.attn = Cross_Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
         self.attn = Cross_distance_patch(
             dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -287,6 +280,29 @@ class ML_Block(nn.Module):
         
         A = self.attn(x,p_inds,n_inds)
         return A, p_inds, n_inds
+class ML_Block(nn.Module):
+    # Attention Block
+    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
+        super().__init__()
+        self.attn = Cross_Attention(
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
+        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        # drop out 추가해 줄 필요 있음
+    def forward(self, x, labels):
+        cls_feat = x[:,0].detach()
+        dist_mat = euclidean_dist(cls_feat, cls_feat)
+        _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
+        A = x[:,1:]
+        P = x[p_inds,1:]
+        N = x[n_inds,1:]
+        # A = self.norm_A(A)
+        # P = self.norm_P(P)
+        # N = self.norm_N(N)
+        AP,AN,P,N = self.attn(A,P,N)
+        return torch.stack((AP,AN,P,N))
+        
 class Block(nn.Module):
     # Cross_Attention Block
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
@@ -437,8 +453,10 @@ class TransReID(nn.Module):
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
+
         self.loss_type = kwargs['loss_type']
         self.ml = kwargs['ml']
+        self.feat_cat = kwargs['feat_cat']
         # MSMT 17 = {Cam : 15}
         # Market-1501 = {Cam : 6}
         # DukeMTMC-reID = {Cam : 8}
@@ -478,9 +496,12 @@ class TransReID(nn.Module):
         self.norm = norm_layer(embed_dim)
         
         # Metric Learning Cross-Attention
-        self.ml_blocks = ML_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                drop=drop_rate, attn_drop=attn_drop_rate)
-
+        if self.loss_type == "triplet_ml":    
+            self.ml_blocks = ML_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                    drop=drop_rate, attn_drop=attn_drop_rate)
+        elif self.loss_type == "triplet_ml_1":
+            self.ml_blocks = ML_Block_1(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                    drop=drop_rate, attn_drop=attn_drop_rate)
         # Classifier head
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=.02)
@@ -534,15 +555,18 @@ class TransReID(nn.Module):
         else:
             for blk in self.blocks: # 전체 depth 다 통과
                 x = blk(x)
-
             x = self.norm(x)
-            
-            if self.loss_type == "hnewth_patch" :
-                return x
-            elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
-                return x
-            elif self.loss_type == "triplet":
-                return x[:, 0]
+            if self.feat_cat : 
+                return x 
+            else :
+                if self.loss_type == "hnewth_patch" :
+                    return x
+                elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
+                    return x
+                elif self.loss_type == "triplet":
+                    return x[:, 0]
+                else : 
+                    return x[:, 0]
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
         return x

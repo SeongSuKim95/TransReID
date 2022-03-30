@@ -151,8 +151,9 @@ class build_transformer(nn.Module): # nn.Module 상속
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
         self.explain = cfg.TEST.EXPLAIN
+        self.IF_CAT = cfg.MODEL.IF_FEAT_CAT
         self.in_planes = 768
-
+        self.cat_in_planes = 768 * 2
         print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
 
         if cfg.MODEL.SIE_CAMERA:
@@ -174,7 +175,8 @@ class build_transformer(nn.Module): # nn.Module 상속
                                                         drop_rate= cfg.MODEL.DROP_OUT,
                                                         attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
                                                         loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
-                                                        ml = cfg.MODEL.ML)
+                                                        ml = cfg.MODEL.ML,
+                                                        feat_cat = cfg.MODEL.IF_FEAT_CAT)
                                                         
         if cfg.MODEL.TRANSFORMER_TYPE == 'deit_small_patch16_224_TransReID':
             self.in_planes = 384
@@ -206,30 +208,52 @@ class build_transformer(nn.Module): # nn.Module 상속
             self.classifier = CircleLoss(self.in_planes, self.num_classes,
                                         s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
         else:
-            self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
-            self.classifier.apply(weights_init_classifier)
-
+            if self.IF_CAT :
+                self.classifier = nn.Linear(self.cat_in_planes, self.num_classes, bias=False)
+                self.classifier.apply(weights_init_classifier)
+            else :
+                self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
+                self.classifier.apply(weights_init_classifier)
         self.bottleneck = nn.BatchNorm1d(self.in_planes) #bottle neck layer는 BN
         self.bottleneck.bias.requires_grad_(False)
         self.bottleneck.apply(weights_init_kaiming)
 
+        self.bottleneck_patch = nn.BatchNorm1d(self.in_planes) #bottle neck layer는 BN
+        self.bottleneck_patch.bias.requires_grad_(False)
+        self.bottleneck_patch.apply(weights_init_kaiming)
+
     def forward(self, x, label=None, cam_label= None, view_label=None):
         global_feat = self.base(x, cam_label=cam_label, view_label=view_label)
-
+        if global_feat.dim() == 3 : # IF model outputs whole tokens
+            cls_feat = global_feat[:,0]
+            patch_feat = global_feat[:,1:]  
+        else : 
+            cls_feat = global_feat
         if self.training:
-            if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
-                cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
-            else:
-                if self.METRIC_LOSS_TYPE == 'hnewth_patch':
-                    feat = self.bottleneck(global_feat[:,0]) # base model을 통과한 feature를 bottleneck layer에 통과
+            if self.IF_CAT : 
+                if self.ID_LOSS_TYPE == 'softmax':
+                    cls_feat = self.bottleneck(cls_feat) # base model을 통과한 feature를 bottleneck layer에 통과   
+                    #patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
+                    feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
                     cls_score = self.classifier(feat)
-                else :
+            else : 
+                if self.ID_LOSS_TYPE == 'softmax':
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
-                    cls_score = self.classifier(feat)
+                    cls_score = self.classifier(feat) 
+                elif self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
+                    feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
+                    cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
+                else:
+                    if self.METRIC_LOSS_TYPE == 'hnewth_patch':
+                        feat = self.bottleneck(global_feat[:,0]) # base model을 통과한 feature를 bottleneck layer에 통과
+                        cls_score = self.classifier(feat)
+                    else :
+                        feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
+                        cls_score = self.classifier(feat)
             # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
             # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
             return cls_score, global_feat  # global feature for triplet loss
+        #Inference
         else: # evaluation일때는 feature만 사용 (feature의 bnneck 통과여부는 선택 가능)
             if not self.explain:
                 if self.neck_feat == 'after':
@@ -238,7 +262,14 @@ class build_transformer(nn.Module): # nn.Module 상속
                     return feat
                 else:
                     # print("Test with feature before BN")
-                    return global_feat
+                    if self.IF_CAT :
+                         #return  cls_feat
+                         #cls_feat = self.bottleneck(cls_feat)
+                         #patch_feat = torch.mean(patch_feat,dim=1)
+                         patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
+                         return torch.cat((cls_feat,patch_feat),dim=1)
+                    else :
+                        return self.bottleneck(cls_feat)
             else:
                 return global_feat
     def load_param(self, trained_path):
@@ -440,6 +471,7 @@ class build_transformer_ml(nn.Module):
         self.cos_layer = cfg.MODEL.COS_LAYER
         self.neck = cfg.MODEL.NECK
         self.neck_feat = cfg.TEST.NECK_FEAT
+        self.loss_type = cfg.MODEL.METRIC_LOSS_TYPE
         self.in_planes = 768
         self.ml_in_planes = 768 + 2048
         print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
@@ -496,7 +528,7 @@ class build_transformer_ml(nn.Module):
             self.classifier = CircleLoss(self.in_planes, self.num_classes,
                                         s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
         else:
-            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml_1':
+            if self.loss_type == 'triplet_ml_1':
                 self.classifier_ml = nn.Linear(self.ml_in_planes,num_classes,bias=False)
                 self.classifier_ml.apply(weights_init_classifier)
             else :
@@ -515,23 +547,35 @@ class build_transformer_ml(nn.Module):
         ID_feat = self.ID_branch(features) # self.b1 = last layer + layer_norm
         global_feat = ID_feat[:, 0] # cls_token feature, [bs, feat_dim]
         feat = self.bottleneck(global_feat)
-        triplet_feat, p_inds, n_inds = self.Metric_branch(features,label)
-         
-        feat_cat = torch.cat((feat,triplet_feat),dim=1)
-        
-        if self.training:
-            if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                cls_score = self.classifier(feat, label)
-            else:
-                cls_score = self.classifier_ml(feat_cat)
-                # triplet_features = self.Metric_branch(features,label)
-            return cls_score, feat_cat, p_inds, n_inds # triplet features for triplet loss
-        else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
-            if self.neck_feat == 'after':
-                return torch.cat((feat,triplet_feat),dim=1) # feat
-            else:
-                return torch.cat((feat,triplet_feat),dim=1) # global feat
-
+        if self.loss_type == "triplet_ml_1":
+            triplet_feat, p_inds, n_inds = self.Metric_branch(features,label)
+            feat_cat = torch.cat((feat,triplet_feat),dim=1)
+            
+            if self.training:
+                if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
+                    cls_score = self.classifier(feat, label)
+                else:
+                    cls_score = self.classifier_ml(feat_cat)
+                    # triplet_features = self.Metric_branch(features,label)
+                return cls_score, feat_cat, p_inds, n_inds # triplet features for triplet loss
+            else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
+                if self.neck_feat == 'after':
+                    return torch.cat((feat,triplet_feat),dim=1) # feat
+                else:
+                    return torch.cat((feat,triplet_feat),dim=1) # global feat
+        elif self.loss_type == "triplet_ml":
+            if self.training:
+                if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
+                    cls_score = self.classifier(feat, label)
+                else:
+                    cls_score = self.classifier(feat)
+                    triplet_features = self.Metric_branch(features,label)
+                return cls_score, triplet_features  # triplet features for triplet loss
+            else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
+                if self.neck_feat == 'after':
+                    return torch.cat((feat,triplet_feat),dim=1) # feat
+                else:
+                    return torch.cat((feat,triplet_feat),dim=1) # global feat
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
         for i in param_dict:

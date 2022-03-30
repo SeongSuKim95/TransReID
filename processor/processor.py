@@ -88,6 +88,8 @@ def do_train(cfg,
                     loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
                 elif triplet_type =='hnewth_patch':
                     loss = loss_fn(score, feat, target, target_cam)
+                else : 
+                    loss = loss_fn(score,feat,target)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)

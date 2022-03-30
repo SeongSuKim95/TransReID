@@ -38,7 +38,7 @@ _C.MODEL.IF_WITH_CENTER = 'no'
 _C.MODEL.ID_LOSS_TYPE = 'softmax'
 _C.MODEL.ID_LOSS_WEIGHT = 1.0
 _C.MODEL.TRIPLET_LOSS_WEIGHT = 1.0
-
+_C.MODEL.IF_FEAT_CAT = False
 _C.MODEL.METRIC_LOSS_TYPE = 'triplet'
 # If train with multi-gpu ddp mode, options: 'True', 'False'
 _C.MODEL.DIST_TRAIN = False
