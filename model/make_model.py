@@ -231,13 +231,19 @@ class build_transformer(nn.Module): # nn.Module 상속
             cls_feat = global_feat
         if self.training:
             if self.IF_CAT : 
-                if self.ID_LOSS_TYPE == 'softmax':
+                if self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE =='':
                     cls_feat = self.bottleneck(cls_feat) # base model을 통과한 feature를 bottleneck layer에 통과   
                     #patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
                     feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
                     cls_score = self.classifier(feat)
+                elif self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE == 'triplet_patch':
+                    cls_feat = self.bottleneck(cls_feat) 
+                    feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
+                    cls_score = self.classifier(feat)
+
+                    return cls_score, feat
             else : 
-                if self.ID_LOSS_TYPE == 'softmax':
+                if self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE =='':
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                     cls_score = self.classifier(feat) 
                 elif self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
@@ -247,6 +253,11 @@ class build_transformer(nn.Module): # nn.Module 상속
                     if self.METRIC_LOSS_TYPE == 'hnewth_patch':
                         feat = self.bottleneck(global_feat[:,0]) # base model을 통과한 feature를 bottleneck layer에 통과
                         cls_score = self.classifier(feat)
+                    elif self.METRIC_LOSS_TYPE == 'triplet_patch_noncat':
+                        cls_feat = self.bottleneck(cls_feat)
+                        cls_score = self.classifier(cls_feat)
+                        patch_feat = torch.mean(patch_feat,dim=1)
+                        return cls_score, patch_feat
                     else :
                         feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                         cls_score = self.classifier(feat)
@@ -264,7 +275,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     # print("Test with feature before BN")
                     if self.IF_CAT :
                          #return  cls_feat
-                         #cls_feat = self.bottleneck(cls_feat)
+                         cls_feat = self.bottleneck(cls_feat)
                          #patch_feat = torch.mean(patch_feat,dim=1)
                          patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
                          return torch.cat((cls_feat,patch_feat),dim=1)

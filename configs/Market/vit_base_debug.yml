@@ -1,7 +1,7 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_PATH: './pretrain/vit_image_net_224.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  METRIC_LOSS_TYPE: 'triplet_patch_noncat'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -46,7 +46,7 @@ SOLVER:
   BIAS_LR_FACTOR: 2
 
 TEST:
-  EVAL: True
+  EVAL: False
   IMS_PER_BATCH: 256
   RE_RANKING: False
   WEIGHT: './logs/market_vit_base_256_128/101/transformer_120_101.pth'
@@ -63,5 +63,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 101
-WANDB : False
+INDEX : 207
+WANDB : True

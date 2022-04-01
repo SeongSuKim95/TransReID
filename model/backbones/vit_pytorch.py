@@ -565,6 +565,10 @@ class TransReID(nn.Module):
                     return x
                 elif self.loss_type == "triplet":
                     return x[:, 0]
+                elif self.loss_type == "triplet_patch":
+                    return x
+                elif self.loss_type == "triplet_patch_noncat":
+                    return x
                 else : 
                     return x[:, 0]
     def forward(self, x, cam_label=None, view_label=None):
