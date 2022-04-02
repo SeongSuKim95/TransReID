@@ -1,7 +1,7 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_PATH: './pretrain/vit_image_net_224.pth' 
-  METRIC_LOSS_TYPE: 'triplet_patch_noncat'
+  METRIC_LOSS_TYPE: 'triplet_ss'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -34,7 +34,7 @@ SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
   MAX_EPOCHS: 120
-  BASE_LR: 0.008
+  BASE_LR: 0.0003
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -63,5 +63,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 207
-WANDB : True
+INDEX : 9999
+WANDB : False

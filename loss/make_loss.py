@@ -6,7 +6,7 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import TripletBranchLoss_1, TripletLoss, TripletAttentionLoss, TripletPatchAttentionLoss,TripletBranchLoss
+from .triplet_loss import TripletAttentionLoss_ss, TripletBranchLoss_1, TripletLoss, TripletAttentionLoss, TripletPatchAttentionLoss,TripletBranchLoss
 from .center_loss import CenterLoss
 import torch
 from typing import Tuple
@@ -27,9 +27,10 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                     triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
                     print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-                    # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
+                    # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet
+                    #  loss
                     # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
-        elif loss_type == "triplet_ml_1":
+        elif loss_type == "triplet_ml_1": 
             if cfg.MODEL.NO_MARGIN:
                     triplet = TripletBranchLoss_1() # __call__ return : loss, dist_ap, dist_an
                     print("using soft triplet branch loss for training")
@@ -45,6 +46,13 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                 triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
                 print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
+        elif loss_type == "triplet_ss":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss()
+                print("using soft triplet attention loss ss for training")
+            else:
+                triplet = TripletAttentionLoss_ss(cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet attention loss ss with margin:{}".format(cfg.SOLVER.MARGIN))
         elif loss_type == "hnewth":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletAttentionLoss()
@@ -143,7 +151,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-        elif loss_type == 'triplet' or  loss_type == 'triplet_patch' or loss_type == 'triplet_patch_noncat':
+        elif loss_type in ['triplet','triplet_patch','triplet_patch_noncat','triplet_ss']:
             def loss_func(score, feat, target, target_cam):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
                     if isinstance(score, list): 

@@ -555,3 +555,142 @@ class TripletBranchLoss_1(object):
             Triplet_loss = self.ranking_loss(dist_an - dist_ap, y) 
 
         return Triplet_loss, dist_ap, dist_an
+
+class TripletAttentionLoss_ss(object):
+    """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
+    Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
+    Loss for Person Re-Identification'."""
+
+    def __init__(self, margin: Optional[float] = None):
+        self.margin = margin
+        self.attn_loss = nn.MSELoss()
+        if margin is not None:
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        else:
+            self.ranking_loss = nn.SoftMarginLoss()
+        self.weight_param = nn.Parameter(
+            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
+        )
+    def __call__(
+        self,
+        global_feat: torch.Tensor,
+        labels: torch.Tensor,
+        normalize_feature: bool = False,
+    ) -> Tuple[torch.Tensor]:
+        #global_feat = global_feat.contiguous()
+        
+        cls_feat = global_feat[:,0]
+        patch_feat_A = global_feat[:,1:]
+        B,N,C = patch_feat_A.shape
+        scale = cls_feat.shape[-1] ** 0.5
+        if normalize_feature:
+            cls_feat = normalize_max(cls_feat, axis=-1)
+        dist_mat = euclidean_dist(cls_feat, cls_feat)
+
+        cls_similarity = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)/scale
+        cls_similarity = cls_similarity.softmax(-1)
+        #dist_mat = cosine_distance(global_feat,global_feat)
+        
+        
+        (
+            dist_ap,
+            dist_an,
+            dist_an_mean,
+            ind_pos,
+            ind_neg,
+        ) = hard_example_mining_with_inds(dist_mat, labels)
+
+        patch_feat_P = patch_feat_A[ind_pos]
+        patch_feat_N = patch_feat_A[ind_neg]
+
+        AP_similarity = patch_feat_A @ patch_feat_P.transpose(-2,-1)
+        AN_similarity = patch_feat_A @ patch_feat_N.transpose(-2,-1)
+        
+        AP_value, AP_index = AP_similarity.max(-1)
+        AN_value, AN_index = AN_similarity.max(-1)
+
+        AP_index = AP_index.unsqueeze(-1).expand(B,N,C)
+        AP_patch = torch.gather(patch_feat_P,1,AP_index) # Anchor의 patch와 가장 가까운 Positive patch
+        
+        AN_index = AN_index.unsqueeze(-1).expand(B,N,C)
+        AN_patch = torch.gather(patch_feat_N,1,AN_index) # Anchor의 patch와 가장 가까운 Negative patch
+        
+        AP_dist = torch.norm(patch_feat_A - AP_patch,p=2,dim=2)
+        AP_dist = torch.sum(AP_dist,dim=1)
+        #weighted_AP_dist = torch.sum(cls_similarity * AP_dist,dim=1)
+
+        AN_dist = torch.norm(patch_feat_A - AN_patch,p=2,dim=2)
+        AN_dist = torch.sum(AN_dist,dim=1)
+        #weighted_AN_dist = torch.sum(cls_similarity * AN_dist,dim=1)
+
+        # neg_weight --> BoT : [64,2048] , ViT : [64, 768]
+        # global_feat --> [64,2048] 
+        # Euclidean distance between Weighted feature of Anchor & negative, positive
+        
+        #=================================================================================
+
+        # y = weighted_AN_dist.new().resize_as_(weighted_AN_dist).fill_(1) # y.shape = 64
+
+        # if self.margin is not None:
+        #     loss_ss = self.ranking_loss(weighted_AN_dist, weighted_AP_dist, y)
+        #     loss_cls = self.ranking_loss(dist_an, dist_ap,y)
+        #     Triplet_loss = loss_ss + loss_cls
+        # else:
+        #     loss_ss = self.ranking_loss(weighted_AN_dist - weighted_AP_dist, y)
+        #     loss_cls = self.ranking_loss(dist_an, dist_ap,y)
+        #     Triplet_loss = loss_ss + loss_cls
+        # return Triplet_loss, weighted_AN_dist, weighted_AP_dist
+        #=================================================================================
+        y = AN_dist.new().resize_as_(AN_dist).fill_(1) # y.shape = 64
+
+        if self.margin is not None:
+            loss_ss = self.ranking_loss(AN_dist, AP_dist, y)
+            #loss_cls = self.ranking_loss(dist_an, dist_ap,y)
+            Triplet_loss = loss_ss 
+        else:
+            loss_ss = self.ranking_loss(AN_dist - AP_dist, y)
+            #loss_cls = self.ranking_loss(dist_an, dist_ap,y)
+            Triplet_loss = loss_ss
+        return Triplet_loss, AN_dist, AP_dist
+    def weight(
+        self, ind_neg: torch.Tensor, global_feat : torch.Tensor
+    ) -> torch.Tensor: # target = labels
+
+        # weight_neg1 = param[target] # 각 sample ID의 weight vector [64,768]
+        # weight_neg2 = param[target[ind_neg]] # 각 sample ID와 가장 먼 sample ID의 weight vector
+        # weight_neg = torch.abs(weight_neg1 - weight_neg2) # 둘의 차이, [64,2048]
+        # max, _ = torch.max(weight_neg, dim=1, keepdim=True) # max : [64,1] , weight_neg 각 행에서 가장 큰 값
+        # weight_neg = weight_neg / (max + 1e-12) # 큰값으로 normalize
+        # weight_neg[weight_neg < t] = -self.weight_param 
+        # weight_neg = weight_neg + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        
+        weight_neg_patch1 = global_feat # 각 sample ID의 patch feature 
+        weight_neg_patch2 = global_feat[ind_neg] # 각 sample ID와 가장 먼 sample ID의 patch 
+        
+        # cos_distance_weight
+
+        dot= torch.sum(weight_neg_patch1 * weight_neg_patch2,dim=-1)
+        weight_neg_patch1_norm = torch.norm(weight_neg_patch1, p=2, dim=-1)
+        weight_neg_patch2_norm = torch.norm(weight_neg_patch2, p=2, dim=-1)
+        cos = dot/(weight_neg_patch1_norm * weight_neg_patch2_norm)
+        acos = torch.acos(cos)
+        acos_max, _ = torch.max(acos,dim=1,keepdim=True)
+        acos_norm = acos / (acos_max + 1e-12)
+        neg_weight = acos_norm.unsqueeze(-1)
+        
+        # Need to fix
+
+        # Euclidean_distance_weight
+        dist = torch.norm(torch.abs(weight_neg_patch1 - weight_neg_patch2),p=2,dim=-1)
+        max, _ = torch.max(dist, dim = 1 ,keepdim = True)
+        dist  = dist / (max + 1e-12)
+        _, idx = dist.sort(dim=1)
+        dist[idx<idx.shape[1]*0.5] = -self.weight_param
+        dist = dist + self.weight_param
+        # dist = dist - self.weight_param
+        neg_weight = dist.unsqueeze(-1)
+        # For numerical stability
+        # 나중에 해보기
+        # acos_norm[acos_norm<t] = -self.weight_param
+        # acos_norm = acos_norm + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        return neg_weight
