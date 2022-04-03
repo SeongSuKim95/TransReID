@@ -555,6 +555,22 @@ class TripletBranchLoss_1(object):
             Triplet_loss = self.ranking_loss(dist_an - dist_ap, y) 
 
         return Triplet_loss, dist_ap, dist_an
+def euclidean_dist(x, y):
+    """
+    Args:
+      x: pytorch Variable, with shape [m, d]
+      y: pytorch Variable, with shape [n, d]
+    Returns:
+      dist: pytorch Variable, with shape [m, n]
+    """
+    m, n = x.size(0), y.size(0)
+    xx = torch.pow(x, 2).sum(1, keepdim=True).expand(m, n)
+    yy = torch.pow(y, 2).sum(1, keepdim=True).expand(n, m).t()
+    dist = xx + yy
+    dist = dist - 2 * torch.matmul(x, y.t())
+    # dist.addmm_(1, -2, x, y.t())
+    dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
+    return dist
 
 class TripletAttentionLoss_ss(object):
     """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
@@ -579,19 +595,29 @@ class TripletAttentionLoss_ss(object):
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
         
-        cls_feat = global_feat[:,0]
+        cls_feat = global_feat[:,0].detach()
         patch_feat_A = global_feat[:,1:]
         B,N,C = patch_feat_A.shape
+        ID = 4
         scale = cls_feat.shape[-1] ** 0.5
-        if normalize_feature:
-            cls_feat = normalize_max(cls_feat, axis=-1)
-        dist_mat = euclidean_dist(cls_feat, cls_feat)
+        
+        #################################################        
+        # if normalize_feature:
+        #     cls_feat = normalize_max(cls_feat, axis=-1)
+        # dist_mat = euclidean_dist(cls_feat, cls_feat)
+        # cls_similarity = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)/scale
+        # cls_similarity = cls_similarity.softmax(-1)
+        # dist_mat = cosine_distance(global_feat,global_feat)
+        #################################################
+        weight = torch.zeros((B,N)) # weight = torch.zeros((B,N),requires_grad = True)
+        cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
+        patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
 
-        cls_similarity = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)/scale
-        cls_similarity = cls_similarity.softmax(-1)
-        #dist_mat = cosine_distance(global_feat,global_feat)
-        
-        
+        cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
+        rank = int(N*0.3)
+        val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
+        val = val.reshape(B,-1)
+        idx = idx.reshape(B,-1)
         (
             dist_ap,
             dist_an,
@@ -606,8 +632,8 @@ class TripletAttentionLoss_ss(object):
         AP_similarity = patch_feat_A @ patch_feat_P.transpose(-2,-1)
         AN_similarity = patch_feat_A @ patch_feat_N.transpose(-2,-1)
         
-        AP_value, AP_index = AP_similarity.max(-1)
-        AN_value, AN_index = AN_similarity.max(-1)
+        AP_value, AP_index = torch.max(AP_similarity,-1)
+        AN_value, AN_index = torch.max(AN_similarity,-1)
 
         AP_index = AP_index.unsqueeze(-1).expand(B,N,C)
         AP_patch = torch.gather(patch_feat_P,1,AP_index) # Anchor의 patch와 가장 가까운 Positive patch
@@ -615,11 +641,13 @@ class TripletAttentionLoss_ss(object):
         AN_index = AN_index.unsqueeze(-1).expand(B,N,C)
         AN_patch = torch.gather(patch_feat_N,1,AN_index) # Anchor의 patch와 가장 가까운 Negative patch
         
-        AP_dist = torch.norm(patch_feat_A - AP_patch,p=2,dim=2)
+        #AP_dist = torch.norm(patch_feat_A - AP_patch,p=2,dim=2)
+        AP_dist = torch.cdist(patch_feat_A,AP_patch).diagonal(dim1=-2,dim2=-1)
         AP_dist = torch.sum(AP_dist,dim=1)
         #weighted_AP_dist = torch.sum(cls_similarity * AP_dist,dim=1)
 
-        AN_dist = torch.norm(patch_feat_A - AN_patch,p=2,dim=2)
+        #AN_dist = torch.norm(patch_feat_A - AN_patch,p=2,dim=2)
+        AN_dist = torch.cdist(patch_feat_A,AN_patch).diagonal(dim1=-2,dim2=-1)
         AN_dist = torch.sum(AN_dist,dim=1)
         #weighted_AN_dist = torch.sum(cls_similarity * AN_dist,dim=1)
 
