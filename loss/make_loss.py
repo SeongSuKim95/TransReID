@@ -15,6 +15,7 @@ from typing import Tuple
 def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     sampler = cfg.DATALOADER.SAMPLER
     loss_type = cfg.MODEL.METRIC_LOSS_TYPE
+    patch_ratio = cfg.SOLVER.PATCH_RATIO
     feat_dim = 2048
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True) 
     # center loss는 parameter가 존재, nn.Module을 상속받는 class
@@ -48,11 +49,11 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                 print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
         elif loss_type == "triplet_ss":
             if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss()
-                print("using soft triplet attention loss ss for training")
+                triplet = TripletAttentionLoss_ss(patch_ratio)
+                print("using soft triplet_ss attention loss for training with patch ratio : {}".format(patch_ratio))
             else:
-                triplet = TripletAttentionLoss_ss(cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet attention loss ss with margin:{}".format(cfg.SOLVER.MARGIN))
+                triplet = TripletAttentionLoss_ss(patch_ratio,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss attention loss with patch ratio : {}, margin:{}".format(patch_ratio,cfg.SOLVER.MARGIN))
         elif loss_type == "hnewth":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletAttentionLoss()
@@ -179,15 +180,17 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         ID_LOSS = F.cross_entropy(score, target)
 
                     if isinstance(feat, list): 
-                            TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]]
-                            TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
-                            TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
+                        TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]]
+                        TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
+                        TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                            TRI_LOSS = triplet(feat, target)[0]
+                        TRI_LOSS = triplet(feat, target)[0]
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-
+        # elif loss_type == 'triplet_ss':
+        #     def loss_func(feat,target):
+        #         return 
         elif loss_type == 'hnewth':
             def loss_func(score, feat, target, target_cam, cls_param):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':

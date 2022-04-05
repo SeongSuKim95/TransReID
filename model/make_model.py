@@ -241,6 +241,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
                     cls_score = self.classifier(feat)
                     return cls_score, feat
+
             else : 
                 if self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE =='':
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과

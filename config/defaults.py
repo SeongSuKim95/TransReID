@@ -138,7 +138,8 @@ _C.SOLVER.MARGIN = 0.3
 _C.SOLVER.CENTER_LR = 0.5
 # Balanced weight of center loss
 _C.SOLVER.CENTER_LOSS_WEIGHT = 0.0005
-
+# Patch ratio for Patch triplet loss
+_C.SOLVER.PATCH_RATIO = 0.3
 # Settings of weight decay
 _C.SOLVER.WEIGHT_DECAY = 0.0005
 _C.SOLVER.WEIGHT_DECAY_BIAS = 0.0005
