@@ -577,11 +577,12 @@ class TripletAttentionLoss_ss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, patch_ratio, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, patch_ratio, num_instance, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
         self.patch_ratio = patch_ratio
+        self.num_instance = num_instance
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
@@ -595,10 +596,10 @@ class TripletAttentionLoss_ss(object):
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
         
-        cls_feat = global_feat[:,0].detach()
+        cls_feat = global_feat[:,0] # detach()
         patch_feat_A = global_feat[:,1:]
         B,N,C = patch_feat_A.shape
-        ID = 4
+        ID = self.num_instance
         scale = cls_feat.shape[-1] ** 0.5
         
         #################################################        
