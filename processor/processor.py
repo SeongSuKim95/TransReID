@@ -80,7 +80,7 @@ def do_train(cfg,
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
-                if triplet_type in ['triplet','triplet_ml','triplet_patch', 'triplet_patch_noncat', 'triplet_ss']:
+                if triplet_type in ['triplet','triplet_ml','triplet_patch', 'triplet_patch_noncat']:
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type == 'triplet_ml_1':
                     loss = loss_fn(score, feat, p_inds, n_inds, target, target_cam)
@@ -88,6 +88,8 @@ def do_train(cfg,
                     loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
                 elif triplet_type =='hnewth_patch':
                     loss = loss_fn(score, feat, target, target_cam)
+                elif triplet_type =='triplet_ss':
+                    loss = loss_fn(score,feat,target,target_cam,epoch)
                 else : 
                     loss = loss_fn(score,feat,target)
 

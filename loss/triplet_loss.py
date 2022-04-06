@@ -577,12 +577,13 @@ class TripletAttentionLoss_ss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, patch_ratio, num_instance, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, patch_ratio, num_instance, max_epoch, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
         self.patch_ratio = patch_ratio
         self.num_instance = num_instance
+        self.max_epoch = max_epoch
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
@@ -592,16 +593,32 @@ class TripletAttentionLoss_ss(object):
         self,
         global_feat: torch.Tensor,
         labels: torch.Tensor,
+        epoch,
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
         
+        if epoch >= self.max_epoch * 0.5 :
+            patch_ratio = self.patch_ratio * 0.5
+        else :
+            patch_ratio = self.patch_ratio
         cls_feat = global_feat[:,0] # detach()
+        
+        # cls_feat_detach = global_feat[:,0].detach()
+        # dist_mat_cls = euclidean_dist(cls_feat_detach,cls_feat_detach)
+        
+        # (
+        #     dist_ap_cls,
+        #     dist_an_cls,
+        #     dist_an_mean_cls,
+        #     ind_pos_cls,
+        #     ind_neg_cls,
+        # ) = hard_example_mining_with_inds(dist_mat_cls, labels)
+
         patch_feat_A = global_feat[:,1:]
         B,N,C = patch_feat_A.shape
         ID = self.num_instance
         scale = cls_feat.shape[-1] ** 0.5
-        
         #################################################        
         # if normalize_feature:
         #     cls_feat = normalize_max(cls_feat, axis=-1)
@@ -614,20 +631,36 @@ class TripletAttentionLoss_ss(object):
         patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
 
         cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
-        rank = int(N*self.patch_ratio)
+        #ratio_decay = 1 - epoch/self.max_epoch
+        rank = int(N*patch_ratio)
         val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
         val = val.reshape(B,-1)
+        #val = val.squeeze(-1)
         idx = idx.reshape(B,-1)
 
         dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
         out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
+        
+        # max_val, _ = torch.max(val,dim=-1,keepdim=True)
+        # max = max_val.squeeze(-1).sum(-1).unsqueeze(-1)
+        # val = val.reshape(B,-1)/(max + 1e-12)
+        # out = torch.mean((out * val.unsqueeze(-1)),dim=1)
+        
         max , _ = torch.max(val,dim=1,keepdim=True)
         val = val / (max + 1e-12)
         out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
+        
+        # CONCAT with CLS token
+
+        # out = torch.cat((cls_feat,out),dim=1)
 
         dist_mat = euclidean_dist(out,out)
-        
         dist_ap, dist_an = hard_example_mining(dist_mat, labels) # hard batch mining
+
+        # dist_ap = torch.gather(dist_mat,1,ind_pos_cls.unsqueeze(-1))
+        # dist_an = torch.gather(dist_mat,1,ind_neg_cls.unsqueeze(-1))
+        # dist_ap = dist_ap.squeeze(1)
+        # dist_an = dist_an.squeeze(1)
 
         dist_ap *= (1.0 + self.hard_factor)
         dist_an *= (1.0 - self.hard_factor)
@@ -637,7 +670,7 @@ class TripletAttentionLoss_ss(object):
             loss = self.ranking_loss(dist_an, dist_ap, y)
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
-        return loss, dist_ap, dist_an
+        return loss, dist_ap, dist_an, out
 
     # Cross Attention loss
 
