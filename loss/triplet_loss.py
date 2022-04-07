@@ -598,10 +598,10 @@ class TripletAttentionLoss_ss(object):
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
         
-        if epoch >= self.max_epoch * 0.5 :
-            patch_ratio = self.patch_ratio * 0.5
-        else :
-            patch_ratio = self.patch_ratio
+        # if epoch >= self.max_epoch * 0.5 :
+        #     patch_ratio = self.patch_ratio * 0.5
+        # else :
+        #     patch_ratio = self.patch_ratio
         cls_feat = global_feat[:,0] # detach()
         
         # cls_feat_detach = global_feat[:,0].detach()
@@ -627,31 +627,53 @@ class TripletAttentionLoss_ss(object):
         # cls_similarity = cls_similarity.softmax(-1)
         # dist_mat = cosine_distance(global_feat,global_feat)
         #################################################
-        cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
-        patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
 
-        cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
-        #ratio_decay = 1 - epoch/self.max_epoch
-        rank = int(N*patch_ratio)
-        val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
-        val = val.reshape(B,-1)
-        #val = val.squeeze(-1)
-        idx = idx.reshape(B,-1)
-
-        dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
-        out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
         
+        # # Method 1,2 
+        #cls_feat_b = cls_feat.reshape(ID,-1,C).repeat_interleave(ID,dim=0).reshape(-1,C)
+        cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
+        #patch_feat_A_b = patch_feat_A.repeat_interleave(ID,dim=0)
+        patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
+        cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
+        # rank = int(N*self.patch_ratio)
+        # val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
+        # Method 1
+        # val = val.reshape(B,-1)
+        # idx = idx.reshape(B,-1)
+        # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
+        # out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
+        # max , _ = torch.max(val,dim=1,keepdim=True)
+        # val = val / (max + 1e-12)
+        # out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
+        
+        # Method 2
+        # val = val.squeeze(-1)
         # max_val, _ = torch.max(val,dim=-1,keepdim=True)
         # max = max_val.squeeze(-1).sum(-1).unsqueeze(-1)
         # val = val.reshape(B,-1)/(max + 1e-12)
         # out = torch.mean((out * val.unsqueeze(-1)),dim=1)
         
-        max , _ = torch.max(val,dim=1,keepdim=True)
-        val = val / (max + 1e-12)
-        out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
-        
-        # CONCAT with CLS token
+        # Method 3
+        Anchor_rank = int(N*self.patch_ratio*2)
+        Positive_rank = int(N*self.patch_ratio)
+        mask = torch.zeros(ID*ID,ID*ID,dtype=torch.bool)
+        index = torch.arange(0,B//ID,ID+1)
+        mask[:,index] = True
+        mask = mask.view(-1)
 
+        Anchor_similarity = cls_similarity_b[mask]
+        Positive_similarity = cls_similarity_b[~mask]
+        anchor_val,anchor_idx = torch.topk(Anchor_similarity,Anchor_rank,dim=-1)
+        positive_val, positive_idx = torch.topk(Positive_similarity,Positive_rank,dim=-1)
+        positive_idx = positive_idx.reshape(B,-1)
+        # weight_param = torch.zeros((B*ID,N), dtype=cls_similarity_b.dtype, requires_grad=True).cuda()
+        # idx = idx.reshape(-1,idx.shape[-1])
+        # weight = weight_param.scatter_add_(1,idx,cls_similarity_b)
+        # weight_sum = weight.reshape(B,-1,N).sum(dim=1)
+        # # val_reshape = val.reshape(B,-1)
+        # idx_reshape = idx.reshape(B,-1)
+
+        # CONCAT with CLS token
         # out = torch.cat((cls_feat,out),dim=1)
 
         dist_mat = euclidean_dist(out,out)
