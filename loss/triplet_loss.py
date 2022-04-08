@@ -627,16 +627,21 @@ class TripletAttentionLoss_ss(object):
         # cls_similarity = cls_similarity.softmax(-1)
         # dist_mat = cosine_distance(global_feat,global_feat)
         #################################################
-
-        
         # # Method 1,2 
-        #cls_feat_b = cls_feat.reshape(ID,-1,C).repeat_interleave(ID,dim=0).reshape(-1,C)
         cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
-        #patch_feat_A_b = patch_feat_A.repeat_interleave(ID,dim=0)
         patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
         cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
         # rank = int(N*self.patch_ratio)
         # val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
+        # Method 4
+        rank = int(N*self.patch_ratio)
+        cls_similarity_b = cls_similarity_b.reshape(B,ID,N).sum(dim=1)
+        val,idx= torch.topk(cls_similarity_b,rank,dim=1)
+        dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
+        out = patch_feat_A.gather(1,dummy_idx)
+        max_val, _ = torch.max(val,dim=-1,keepdim=True)
+        val = val/ (max_val + 1e-12)
+        out = torch.mean((out*val.unsqueeze(-1)),dim=1)
         # Method 1
         # val = val.reshape(B,-1)
         # idx = idx.reshape(B,-1)
@@ -654,18 +659,26 @@ class TripletAttentionLoss_ss(object):
         # out = torch.mean((out * val.unsqueeze(-1)),dim=1)
         
         # Method 3
-        Anchor_rank = int(N*self.patch_ratio*2)
-        Positive_rank = int(N*self.patch_ratio)
-        mask = torch.zeros(ID*ID,ID*ID,dtype=torch.bool)
-        index = torch.arange(0,B//ID,ID+1)
-        mask[:,index] = True
-        mask = mask.view(-1)
+        # Anchor_rank = int(N*self.patch_ratio*2)
+        # Positive_rank = int(N*self.patch_ratio)
+        # mask = torch.zeros(ID*ID,ID*ID,dtype=torch.bool)
+        # index = torch.arange(0,B//ID,ID+1)
+        # mask[:,index] = True
+        # mask = mask.view(-1)
+        # Anchor_similarity = cls_similarity_b[mask]
+        # Positive_similarity = cls_similarity_b[~mask]
+        # anchor_val,anchor_idx = torch.topk(Anchor_similarity,Anchor_rank,dim=-1)
+        # positive_val, positive_idx = torch.topk(Positive_similarity,Positive_rank,dim=-1)
+        # positive_val = positive_val.reshape(B,-1)
+        # positive_idx = positive_idx.reshape(B,-1)
 
-        Anchor_similarity = cls_similarity_b[mask]
-        Positive_similarity = cls_similarity_b[~mask]
-        anchor_val,anchor_idx = torch.topk(Anchor_similarity,Anchor_rank,dim=-1)
-        positive_val, positive_idx = torch.topk(Positive_similarity,Positive_rank,dim=-1)
-        positive_idx = positive_idx.reshape(B,-1)
+        # for a_val, a_idx, p_val, p_idx in zip(anchor_val, anchor_idx, positive_val, positive_idx):
+        #     p_intersect = p_idx.unique()
+        #     cat = torch.cat((a_idx,p_intersect))
+        #     cat_idx, cnts = cat.unique(return_counts=True)
+        #     anchor_intersect = cat_idx[cnts!=1]
+        
+
         # weight_param = torch.zeros((B*ID,N), dtype=cls_similarity_b.dtype, requires_grad=True).cuda()
         # idx = idx.reshape(-1,idx.shape[-1])
         # weight = weight_param.scatter_add_(1,idx,cls_similarity_b)
@@ -693,7 +706,9 @@ class TripletAttentionLoss_ss(object):
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
         return loss, dist_ap, dist_an, out
-
+        # def weight(
+    #     self, ind_neg: torch.Tensor, global_feat : torch.Tensor
+    # ) -> torch.Tensor: # target = labels
     # Cross Attention loss
 
     # (
