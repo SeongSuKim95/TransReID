@@ -597,6 +597,7 @@ class TripletAttentionLoss_ss(object):
         global_feat: torch.Tensor,
         labels: torch.Tensor,
         epoch,
+        cls_param: torch.Tensor,
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
@@ -608,15 +609,15 @@ class TripletAttentionLoss_ss(object):
         cls_feat = global_feat[:,0] # detach()
         
         # cls_feat_detach = global_feat[:,0].detach()
-        # dist_mat_cls = euclidean_dist(cls_feat_detach,cls_feat_detach)
+        dist_mat_cls = euclidean_dist(cls_feat,cls_feat)
         
-        # (
-        #     dist_ap_cls,
-        #     dist_an_cls,
-        #     dist_an_mean_cls,
-        #     ind_pos_cls,
-        #     ind_neg_cls,
-        # ) = hard_example_mining_with_inds(dist_mat_cls, labels)
+        (
+            dist_ap_cls,
+            dist_an_cls,
+            dist_an_mean_cls,
+            ind_pos_cls,
+            ind_neg_cls,
+        ) = hard_example_mining_with_inds(dist_mat_cls, labels)
 
         patch_feat_A = global_feat[:,1:]
         B,N,C = patch_feat_A.shape
@@ -647,13 +648,13 @@ class TripletAttentionLoss_ss(object):
         # max_val, _ = torch.max(val,dim=-1,keepdim=True)
         # val = val / (max_val + 1e-12)
         
-        # val[val< t] = -self.weight_param 
+        # val[val< t] = -self.weight_param  
         # val = val + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
         
         # # val = val.softmax(-1)
         # out = torch.mean((out*val.unsqueeze(-1)),dim=1)
        
-        # Method 1
+        # Method 1-1
         val = val.reshape(B,-1)
         idx = idx.reshape(B,-1)
         dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
@@ -661,6 +662,22 @@ class TripletAttentionLoss_ss(object):
         max , _ = torch.max(val,dim=1,keepdim=True)
         val = val / (max + 1e-12)
         out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
+        
+        # Method 1-2
+        diff = (cls_feat - out)
+
+        abs = torch.abs(diff)
+        abs_max , _ = torch.max(abs,dim=1,keepdim=True)
+        abs = 1 -(abs / (abs_max + 1e-12))
+        abs[abs < t] = -self.weight_param 
+        abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        
+        dist_neg = torch.sum(
+            (cls_feat * abs - cls_feat[ind_neg_cls] * abs).pow(2), dim=1
+        ).sqrt() # * : element wise multiplication
+        dist_pos = torch.sum(
+            (cls_feat *  abs - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
+        ).sqrt()
         
         # Method 2
         # val = val.squeeze(-1)
@@ -689,7 +706,6 @@ class TripletAttentionLoss_ss(object):
         #     cat_idx, cnts = cat.unique(return_counts=True)
         #     anchor_intersect = cat_idx[cnts!=1]
         
-
         # weight_param = torch.zeros((B*ID,N), dtype=cls_similarity_b.dtype, requires_grad=True).cuda()
         # idx = idx.reshape(-1,idx.shape[-1])
         # weight = weight_param.scatter_add_(1,idx,cls_similarity_b)
@@ -700,24 +716,39 @@ class TripletAttentionLoss_ss(object):
         # CONCAT with CLS token
         # out = torch.cat((cls_feat,out),dim=1)
 
-        dist_mat = euclidean_dist(out,out)
-        dist_ap, dist_an = hard_example_mining(dist_mat, labels) # hard batch mining
+        # dist_mat = euclidean_dist(out,out)
+        # dist_ap, dist_an = hard_example_mining(dist_mat, labels) # hard batch mining
+        # dist_ap *= (1.0 + self.hard_factor)
+        # dist_an *= (1.0 - self.hard_factor)
+
+        dist_ap_cls *= (1.0 + self.hard_factor)
+        dist_an_cls *= (1.0 + self.hard_factor)
 
         # dist_ap = torch.gather(dist_mat,1,ind_pos_cls.unsqueeze(-1))
         # dist_an = torch.gather(dist_mat,1,ind_neg_cls.unsqueeze(-1))
         # dist_ap = dist_ap.squeeze(1)
         # dist_an = dist_an.squeeze(1)
 
-        dist_ap *= (1.0 + self.hard_factor)
-        dist_an *= (1.0 - self.hard_factor)
-
-        y = dist_an.new().resize_as_(dist_an).fill_(1)
+        y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:
-            loss = self.ranking_loss(dist_an, dist_ap, y)
+            #loss_cls = self.ranking_loss(dist_an_cls.detach(), dist_ap_cls, y)
+            loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls.detach(),y)
+            # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
+            # loss = loss_cls + 0.2 * loss_gap
+            loss = loss_cls_weighted
         else:
-            loss = self.ranking_loss(dist_an - dist_ap, y)
-        return loss, dist_ap, dist_an, out
-        # def weight(
+            #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
+            loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
+            loss =  loss_cls
+        return loss, dist_ap_cls, dist_an_cls, out
+    # Triplet_loss = (
+    #     self.ranking_loss(dist_an.detach() - dist_ap, y)
+    #     + self.ranking_loss(dist_neg - dist_pos, y)
+    #     + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
+    # )
+
+    # def weight(
     #     self, ind_neg: torch.Tensor, global_feat : torch.Tensor
     # ) -> torch.Tensor: # target = labels
     # Cross Attention loss

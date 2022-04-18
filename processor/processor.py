@@ -89,7 +89,7 @@ def do_train(cfg,
                 elif triplet_type =='hnewth_patch':
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type =='triplet_ss':
-                    loss = loss_fn(score,feat,target,target_cam,epoch)
+                    loss = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])
                 else : 
                     loss = loss_fn(score,feat,target)
 

@@ -62,11 +62,11 @@ if __name__ == "__main__":
         logger.info("sum_rank_1:{:.1%}, sum_rank_5 {:.1%}".format(all_rank_1.sum()/10.0, all_rank_5.sum()/10.0))
     else:
        do_inference(cfg,
-                 model,
-                 val_loader,
-                 num_query,
-                 args,
-                 q_dir,
-                 g_dir
-                 )
+                    model,
+                    val_loader,
+                    num_query,
+                    args,
+                    q_dir,
+                    g_dir
+                    )
 

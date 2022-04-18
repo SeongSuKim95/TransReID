@@ -191,7 +191,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
         elif loss_type == 'triplet_ss':
-            def loss_func(score, feat,target,target_cam,epoch):
+            def loss_func(score, feat,target,target_cam,epoch,cls_param):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
                     if isinstance(score, list): 
                         ID_LOSS = [xent(scor, target) for scor in score[1:]]
@@ -222,7 +222,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
                         TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                        TRI_LOSS = triplet(feat, target, epoch)[0]
+                        TRI_LOSS = triplet(feat, target, epoch,cls_param)[0]
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
