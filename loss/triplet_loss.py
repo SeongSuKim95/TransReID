@@ -664,7 +664,14 @@ class TripletAttentionLoss_ss(object):
         out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
         
         # Method 1-2
-        diff = (cls_feat - out)
+        cls_feat_detach = cls_feat.detach()
+        out_detach = out.detach()
+        cls_norm = torch.norm(cls_feat_detach,p=2,dim=1)
+        out_norm = torch.norm(out_detach,p=2,dim=1)
+
+        norm_ratio = (cls_norm / out_norm).unsqueeze(-1)
+        
+        diff = (cls_feat - out * norm_ratio)
 
         abs = torch.abs(diff)
         abs_max , _ = torch.max(abs,dim=1,keepdim=True)
