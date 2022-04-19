@@ -671,12 +671,11 @@ class TripletAttentionLoss_ss(object):
         abs = 1 -(abs / (abs_max + 1e-12))
         abs[abs < t] = -self.weight_param 
         abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-        
         dist_neg = torch.sum(
-            (cls_feat * abs - cls_feat[ind_neg_cls] * abs).pow(2), dim=1
+            (cls_feat * abs - cls_feat[ind_neg_cls] * abs ).pow(2), dim=1
         ).sqrt() # * : element wise multiplication
         dist_pos = torch.sum(
-            (cls_feat *  abs - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
+            (cls_feat * abs - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
         ).sqrt()
         
         # Method 2
