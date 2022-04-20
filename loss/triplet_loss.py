@@ -632,59 +632,76 @@ class TripletAttentionLoss_ss(object):
         # dist_mat = cosine_distance(global_feat,global_feat)
         #################################################
         
+        # Method 5
+        pos_cls = cls_feat[ind_pos_cls]
+        neg_cls = cls_feat[ind_neg_cls]
+
+        pos_sim = (pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        neg_sim = (neg_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+
+        rank = int(N* self.patch_ratio)
+        val_pos,ind_pos = torch.topk(pos_sim,rank,dim=-1)
+        val_neg,ind_neg = torch.topk(neg_sim,rank,dim=-1)
+
+        cat = torch.cat((ind_pos,ind_neg),dim=-1)
+        cat_idx, cnts = cat.unique(return_counts=True,dim=-1)
+        common_patches = cat_idx[cnts!=1]
+        #################################################
         # Method 1,2 
-        cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
-        patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
-        cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
-        rank = int(N*self.patch_ratio)
-        val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
 
-        # Method 4
+        # cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
+        # patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
+        # cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
         # rank = int(N*self.patch_ratio)
-        # cls_similarity_b = cls_similarity_b.reshape(B,ID,N).sum(dim=1)
-        # val,idx = torch.topk(cls_similarity_b,rank,dim=1)
-        # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
-        # out = patch_feat_A.gather(1,dummy_idx)
-        # max_val, _ = torch.max(val,dim=-1,keepdim=True)
-        # val = val / (max_val + 1e-12)
+        # val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
+
+        # # Method 4
+        # # rank = int(N*self.patch_ratio)
+        # # cls_similarity_b = cls_similarity_b.reshape(B,ID,N).sum(dim=1)
+        # # val,idx = torch.topk(cls_similarity_b,rank,dim=1)
+        # # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
+        # # out = patch_feat_A.gather(1,dummy_idx)
+        # # max_val, _ = torch.max(val,dim=-1,keepdim=True)
+        # # val = val / (max_val + 1e-12)
         
-        # val[val< t] = -self.weight_param  
-        # val = val + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        # # val[val< t] = -self.weight_param  
+        # # val = val + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
         
-        # # val = val.softmax(-1)
-        # out = torch.mean((out*val.unsqueeze(-1)),dim=1)
+        # # # val = val.softmax(-1)
+        # # out = torch.mean((out*val.unsqueeze(-1)),dim=1)
        
-        # Method 1-1
-        val = val.reshape(B,-1)
-        idx = idx.reshape(B,-1)
-        dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
-        out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
-        max , _ = torch.max(val,dim=1,keepdim=True)
-        val = val / (max + 1e-12)
-        out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
+        # # Method 1-1
+        # val = val.reshape(B,-1)
+        # idx = idx.reshape(B,-1)
+        # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
+        # out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
+        # max , _ = torch.max(val,dim=1,keepdim=True)
+        # val = val / (max + 1e-12)
+        # out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
         
-        # Method 1-2
-        cls_feat_detach = cls_feat.detach()
-        out_detach = out.detach()
-        cls_norm = torch.norm(cls_feat_detach,p=2,dim=1)
-        out_norm = torch.norm(out_detach,p=2,dim=1)
+        # # Method 1-2
+        # cls_feat_detach = cls_feat.detach()
+        # out_detach = out.detach()
+        # cls_norm = torch.norm(cls_feat_detach,p=2,dim=1)
+        # out_norm = torch.norm(out_detach,p=2,dim=1)
 
-        norm_ratio = (cls_norm / out_norm).unsqueeze(-1)
+        # norm_ratio = (cls_norm / out_norm).unsqueeze(-1)
         
-        diff = (cls_feat - out * norm_ratio)
+        # diff = (cls_feat - out * norm_ratio)
 
-        abs = torch.abs(diff)
-        abs_max , _ = torch.max(abs,dim=1,keepdim=True)
-        abs = 1 -(abs / (abs_max + 1e-12))
-        abs[abs < t] = -self.weight_param 
-        abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-        dist_neg = torch.sum(
-            (cls_feat * abs - cls_feat[ind_neg_cls] * abs ).pow(2), dim=1
-        ).sqrt() # * : element wise multiplication
-        dist_pos = torch.sum(
-            (cls_feat * abs - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
-        ).sqrt()
-        
+        # abs = torch.abs(diff)
+        # abs_max , _ = torch.max(abs,dim=1,keepdim=True)
+        # abs = 1 -(abs / (abs_max + 1e-12))
+        # abs[abs < t] = -self.weight_param 
+        # abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        # dist_neg = torch.sum(
+        #     (cls_feat * abs - cls_feat[ind_neg_cls] * abs ).pow(2), dim=1
+        # ).sqrt() # * : element wise multiplication
+        # dist_pos = torch.sum(
+        #     (cls_feat * abs  - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
+        # ).sqrt()
+        ################################################
+
         # Method 2
         # val = val.squeeze(-1)
         # max_val, _ = torch.max(val,dim=-1,keepdim=True)
@@ -737,12 +754,12 @@ class TripletAttentionLoss_ss(object):
 
         y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:
-            #loss_cls = self.ranking_loss(dist_an_cls.detach(), dist_ap_cls, y)
+            #loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
             loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
-            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls.detach(),y)
+            loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
             # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
             # loss = loss_cls + 0.2 * loss_gap
-            loss = loss_cls_weighted
+            loss = loss_cls_weighted + loss_cls_mean
         else:
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)

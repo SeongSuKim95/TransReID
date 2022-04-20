@@ -8,7 +8,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: False
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
   
@@ -44,7 +44,7 @@ SOLVER:
   WEIGHT_DECAY:  1e-4
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
-  PATCH_RATIO : 0.3
+  PATCH_RATIO : 0.2
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -63,5 +63,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 232
+INDEX : 9999 
 WANDB : False
