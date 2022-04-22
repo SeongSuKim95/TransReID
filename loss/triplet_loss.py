@@ -636,16 +636,75 @@ class TripletAttentionLoss_ss(object):
         pos_cls = cls_feat[ind_pos_cls]
         neg_cls = cls_feat[ind_neg_cls]
 
-        pos_sim = (pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
-        neg_sim = (neg_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        anc_sim = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        # pos_sim = (pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        # neg_sim = (neg_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        # Performance Index 242
+        pos_sim = anc_sim[ind_pos_cls]
+        neg_sim = anc_sim[ind_neg_cls]
 
         rank = int(N* self.patch_ratio)
-        val_pos,ind_pos = torch.topk(pos_sim,rank,dim=-1)
-        val_neg,ind_neg = torch.topk(neg_sim,rank,dim=-1)
+        val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
+        val_pos, ind_pos = val_anc[ind_pos_cls], ind_anc[ind_pos_cls]
+        val_neg, ind_neg = val_anc[ind_neg_cls], ind_anc[ind_neg_cls]
+      
+        cat_pos = torch.cat((ind_anc,ind_pos),dim=-1)
+        cat_neg = torch.cat((ind_anc,ind_neg),dim=-1)
 
-        cat = torch.cat((ind_pos,ind_neg),dim=-1)
-        cat_idx, cnts = cat.unique(return_counts=True,dim=-1)
-        common_patches = cat_idx[cnts!=1]
+        cat_pos_idx, cat_pos_cnts = [torch.unique(x,return_counts=True,dim=0)[0] for x in cat_pos],[torch.unique(x,return_counts=True,dim=0)[1] for x in cat_pos]
+        intersect_pos = [cat_pos_idx[i][cat_pos_cnts[i]!=1] for i in range(B)]
+        patches_pos = [patch_feat_A[i][intersect_pos[i]] for i in range(B)]
+       
+        cat_neg_idx, cat_neg_cnts = [torch.unique(x,return_counts=True,dim=0)[0] for x in cat_neg],[torch.unique(x,return_counts=True,dim=0)[1] for x in cat_neg]
+        intersect_neg = [cat_neg_idx[i][cat_neg_cnts[i]!=1] for i in range(B)]
+        patches_neg = [patch_feat_A[i][intersect_neg[i]] for i in range(B)]
+        
+        anc_pos_val = [anc_sim[i][intersect_pos[i]]/anc_sim[i][intersect_pos[i]].max() for i in range(B)]
+        anc_neg_val = [anc_sim[i][intersect_neg[i]]/anc_sim[i][intersect_neg[i]].max() for i in range(B)]
+         
+        pos_val = [pos_sim[i][intersect_pos[i]]/pos_sim[i][intersect_pos[i]].max() for i in range(B)]
+        neg_val = [neg_sim[i][intersect_neg[i]]/neg_sim[i][intersect_neg[i]].max() for i in range(B)]
+
+        anc_pos_weighted_patches = torch.stack([torch.mean(patches_pos[i]*anc_pos_val[i].unsqueeze(-1),dim=0) for i in range(B)])
+        anc_neg_weighted_patches = torch.stack([torch.mean(patches_neg[i]*anc_neg_val[i].unsqueeze(-1),dim=0) for i in range(B)])
+        pos_weighted_patches = torch.stack([torch.mean(patches_pos[i]*pos_val[i].unsqueeze(-1),dim=0) for i in range(B)])
+        neg_weighted_patches = torch.stack([torch.mean(patches_neg[i]*neg_val[i].unsqueeze(-1),dim=0) for i in range(B)])
+        
+        cls_feat_detach = cls_feat
+        anc_pos_detach = anc_pos_weighted_patches
+        anc_neg_detach = anc_neg_weighted_patches
+        pos_detach = pos_weighted_patches
+        neg_detach = neg_weighted_patches
+
+        cls_norm = torch.norm(cls_feat_detach,p=2,dim=1)
+        anc_pos_norm = torch.norm(anc_pos_detach,p=2,dim=1)
+        anc_neg_norm = torch.norm(anc_neg_detach,p=2,dim=1)
+        pos_norm = torch.norm(pos_detach,p=2,dim=1)
+        neg_norm = torch.norm(neg_detach,p=2,dim=1)
+
+        anc_pos_norm_ratio = (cls_norm / anc_pos_norm).unsqueeze(-1)
+        anc_neg_norm_ratio = (cls_norm / anc_pos_norm).unsqueeze(-1)
+        pos_norm_ratio = (cls_norm[ind_pos_cls] / pos_norm).unsqueeze(-1)
+        neg_norm_ratio = (cls_norm[ind_neg_cls] / neg_norm).unsqueeze(-1)
+
+        anc_pos_diff = (cls_feat - anc_pos_weighted_patches * anc_pos_norm_ratio)
+        anc_neg_diff = (cls_feat - anc_neg_weighted_patches * anc_neg_norm_ratio)
+        pos_diff = (pos_cls - pos_weighted_patches * pos_norm_ratio)
+        neg_diff = (neg_cls - neg_weighted_patches * neg_norm_ratio)
+
+        abs = torch.abs(torch.cat((anc_pos_diff,anc_neg_diff,pos_diff,neg_diff)))
+        abs_max , _ = torch.max(abs,dim=1,keepdim=True)
+        abs = 1 -(abs / (abs_max + 1e-12))
+        abs[abs < t] = -self.weight_param 
+        abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        abs = abs.reshape(-1,B,C)
+        anc_pos_weight , anc_neg_weight, pos_weight, neg_weight = abs[0],abs[1],abs[2],abs[3]
+        dist_neg = torch.sum(
+            (cls_feat * anc_neg_weight - neg_cls * neg_weight ).pow(2), dim=1
+        ).sqrt() # * : element wise multiplication
+        dist_pos = torch.sum(
+            (cls_feat * anc_pos_weight - pos_cls * pos_weight).pow(2), dim=1
+        ).sqrt()
         #################################################
         # Method 1,2 
 
@@ -754,17 +813,17 @@ class TripletAttentionLoss_ss(object):
 
         y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:
-            #loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
+            loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
             loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
-            loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
             # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
             # loss = loss_cls + 0.2 * loss_gap
-            loss = loss_cls_weighted + loss_cls_mean
+            loss = loss_cls_weighted + loss_cls
         else:
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
             loss =  loss_cls
-        return loss, dist_ap_cls, dist_an_cls, out
+        return loss, dist_ap_cls, dist_an_cls
     # Triplet_loss = (
     #     self.ranking_loss(dist_an.detach() - dist_ap, y)
     #     + self.ranking_loss(dist_neg - dist_pos, y)
@@ -880,5 +939,3 @@ class TripletAttentionLoss_ss(object):
     #     # acos_norm[acos_norm<t] = -self.weight_param
     #     # acos_norm = acos_norm + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
     #     return neg_weight
-
-    
