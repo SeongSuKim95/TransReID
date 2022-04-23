@@ -8,7 +8,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: False
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID'
   STRIDE_SIZE: [16, 16]
   
@@ -63,5 +63,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 9999
-WANDB : False
+INDEX : 252
+WANDB : True

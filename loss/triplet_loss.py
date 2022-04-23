@@ -637,11 +637,11 @@ class TripletAttentionLoss_ss(object):
         neg_cls = cls_feat[ind_neg_cls]
 
         anc_sim = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
-        # pos_sim = (pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
-        # neg_sim = (neg_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        pos_sim = (pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
+        neg_sim = (neg_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)
         # Performance Index 242
-        pos_sim = anc_sim[ind_pos_cls]
-        neg_sim = anc_sim[ind_neg_cls]
+        # pos_sim = anc_sim[ind_pos_cls]
+        # neg_sim = anc_sim[ind_neg_cls]
 
         rank = int(N* self.patch_ratio)
         val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
@@ -683,7 +683,7 @@ class TripletAttentionLoss_ss(object):
         neg_norm = torch.norm(neg_detach,p=2,dim=1)
 
         anc_pos_norm_ratio = (cls_norm / anc_pos_norm).unsqueeze(-1)
-        anc_neg_norm_ratio = (cls_norm / anc_pos_norm).unsqueeze(-1)
+        anc_neg_norm_ratio = (cls_norm / anc_neg_norm).unsqueeze(-1)
         pos_norm_ratio = (cls_norm[ind_pos_cls] / pos_norm).unsqueeze(-1)
         neg_norm_ratio = (cls_norm[ind_neg_cls] / neg_norm).unsqueeze(-1)
 
