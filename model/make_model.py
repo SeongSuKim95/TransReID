@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from .backbones.resnet import ResNet, Bottleneck
 import copy
-from .backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
+from .backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID,vit_base_patch16_224_TransReID_SSL
 from loss.metric_learning import Arcface, Cosface, AMSoftmax, CircleLoss
 
 def shuffle_unit(features, shift, group, begin=1):
@@ -166,24 +166,42 @@ class build_transformer(nn.Module): # nn.Module 상속
             view_num = 0
 
         # backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
-        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
-                                                        sie_xishu=cfg.MODEL.SIE_COE,
-                                                        camera=camera_num,
-                                                        view=view_num,
-                                                        stride_size=cfg.MODEL.STRIDE_SIZE,
-                                                        drop_path_rate=cfg.MODEL.DROP_PATH,
-                                                        drop_rate= cfg.MODEL.DROP_OUT,
-                                                        attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
-                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
-                                                        ml = cfg.MODEL.ML,
-                                                        feat_cat = cfg.MODEL.IF_FEAT_CAT)
-                                                        
+        if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
+            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                            sie_xishu=cfg.MODEL.SIE_COE,
+                                                            camera=camera_num,
+                                                            view=view_num,
+                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                            drop_rate= cfg.MODEL.DROP_OUT,
+                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
+                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                            gem_pool = cfg.MODEL.GEM_POOLING,
+                                                            stem_conv = cfg.MODEL.STEM_CONV,
+                                                            ml = cfg.MODEL.ML,
+                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)
+        else :
+            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                            sie_xishu=cfg.MODEL.SIE_COE,
+                                                            camera=camera_num,
+                                                            view=view_num,
+                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                            drop_rate= cfg.MODEL.DROP_OUT,
+                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
+                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                            ml = cfg.MODEL.ML,
+                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)                                            
         if cfg.MODEL.TRANSFORMER_TYPE == 'deit_small_patch16_224_TransReID':
             self.in_planes = 384
+        
         if pretrain_choice == 'imagenet':
-            self.base.load_param(model_path)
+            if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
+               self.base.load_param(model_path,hw_ratio=cfg.MODEL.PRETRAIN_HW_RATIO)
+            else :
+               self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
-        # Base model 이외에 필요한 layer? : gap, classifier, bnneck layer
+            # Base model 이외에 필요한 layer? : gap, classifier, bnneck layer
         self.gap = nn.AdaptiveAvgPool2d(1)
 
         self.num_classes = num_classes
@@ -608,6 +626,7 @@ class build_transformer_ml(nn.Module):
 
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
+    'vit_base_patch16_224_TransReID_SSL': vit_base_patch16_224_TransReID_SSL,
     'deit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'vit_small_patch16_224_TransReID': vit_small_patch16_224_TransReID,
     'deit_small_patch16_224_TransReID': deit_small_patch16_224_TransReID

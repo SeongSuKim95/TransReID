@@ -29,7 +29,7 @@ _C.MODEL.PRETRAIN_PATH = ''
 # Use ImageNet pretrained model to initialize backbone or use self trained model to initialize the whole model
 # Options: 'imagenet' , 'self' , 'finetune'
 _C.MODEL.PRETRAIN_CHOICE = 'imagenet'
-
+_C.MODEL.PRETRAIN_HW_RATIO = 1
 # If train with BNNeck, options: 'bnneck' or 'no'
 _C.MODEL.NECK = 'bnneck'
 # If train loss include center loss, options: 'yes' or 'no'. Loss with center loss has different optimizer configuration
@@ -55,7 +55,8 @@ _C.MODEL.DROP_OUT = 0.0
 _C.MODEL.ATT_DROP_RATE = 0.0
 _C.MODEL.TRANSFORMER_TYPE = 'None'
 _C.MODEL.STRIDE_SIZE = [16, 16]
-
+_C.MODEL.GEM_POOLING = False
+_C.MODEL.STEM_CONV = False
 # JPM Parameter
 _C.MODEL.JPM = False
 _C.MODEL.SHIFT_NUM = 5
@@ -68,8 +69,7 @@ _C.MODEL.SIE_COE = 3.0
 _C.MODEL.SIE_CAMERA = False
 _C.MODEL.SIE_VIEW = False
 
-# ML Parameter 
-
+# ML Parameter
 _C.MODEL.ML = False
 
 # -----------------------------------------------------------------------------

@@ -508,7 +508,9 @@ class PatchEmbed_overlap(nn.Module):
 class TransReID_SSL(nn.Module):
     """ Transformer-based Object Re-Identification
     """
-    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,drop_path_rate=0., norm_layer=partial(nn.LayerNorm, eps=1e-6), local_feature=False, sie_xishu =1.0, hw_ratio=1, gem_pool = False, stem_conv=False):
+    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12, num_heads=12, 
+                 mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,drop_path_rate=0.,
+                 norm_layer=partial(nn.LayerNorm, eps=1e-6), local_feature=False, sie_xishu =1.0, hw_ratio=1,gem_pool = False, stem_conv=False, **kwargs):
         super().__init__()
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
@@ -521,11 +523,18 @@ class TransReID_SSL(nn.Module):
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
+        
+        self.loss_type = kwargs['loss_type']
+        self.ml = kwargs['ml']
+        self.feat_cat = kwargs['feat_cat']
+
         self.in_planes = 768
         self.gem_pool = gem_pool
+
         if self.gem_pool:
             print('using gem pooling')
         # Initialize SIE Embedding
@@ -539,9 +548,9 @@ class TransReID_SSL(nn.Module):
             self.sie_embed = nn.Parameter(torch.zeros(view, 1, embed_dim))
             trunc_normal_(self.sie_embed, std=.02)
 
-        #  print('using drop_out rate is : {}'.format(drop_rate))
-        #  print('using attn_drop_out rate is : {}'.format(attn_drop_rate))
-        #  print('using drop_path rate is : {}'.format(drop_path_rate))
+        print('using drop_out rate is : {}'.format(drop_rate))
+        print('using attn_drop_out rate is : {}'.format(attn_drop_rate))
+        print('using drop_path rate is : {}'.format(drop_path_rate))
 
         self.pos_drop = nn.Dropout(p=drop_rate)
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
@@ -607,12 +616,27 @@ class TransReID_SSL(nn.Module):
         else:
             for blk in self.blocks:
                 x = blk(x)
-
             x = self.norm(x)
         if self.gem_pool:
             gf = self.gem(x[:,1:].permute(0,2,1)).squeeze()
             return x[:, 0] + gf
-        return x[:, 0]
+        if self.feat_cat :
+            return x
+        else :
+            if self.loss_type == "hnewth_patch" :
+                return x
+            elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
+                return x
+            elif self.loss_type == "triplet":
+                return x[:, 0]
+            elif self.loss_type == "triplet_patch":
+                return x
+            elif self.loss_type == "triplet_patch_noncat":
+                return x
+            elif self.loss_type == "triplet_ss":
+                return x
+            else : 
+                return x[:, 0]    
 
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
@@ -742,6 +766,7 @@ class TransReID(nn.Module):
         trunc_normal_(self.pos_embed, std=.02)
 
         self.apply(self._init_weights) # Initialize weights
+        self.gem = GeneralizedMeanPooling()
 
     def _init_weights(self, m): # Layer initialize
         if isinstance(m, nn.Linear):
@@ -790,6 +815,7 @@ class TransReID(nn.Module):
             for blk in self.blocks: # 전체 depth 다 통과
                 x = blk(x)
             x = self.norm(x)
+            
             if self.feat_cat : 
                 return x 
             else :
@@ -838,7 +864,7 @@ class TransReID(nn.Module):
                 print('shape do not match in k :{}: param_dict{} vs self.state_dict(){}'.format(k, v.shape, self.state_dict()[k].shape))
 
 
-def resize_pos_embed(posemb, posemb_new, hight, width):
+def resize_pos_embed(posemb, posemb_new, hight, width,hw_ratio=1):
     # Rescale the grid of position embeddings when loading from state_dict. Adapted from
     # https://github.com/google-research/vision_transformer/blob/00883dd691c63a6830751563748663526e811cee/vit_jax/checkpoint.py#L224
     ntok_new = posemb_new.shape[1]
@@ -846,7 +872,7 @@ def resize_pos_embed(posemb, posemb_new, hight, width):
     posemb_token, posemb_grid = posemb[:, :1], posemb[0, 1:]
     ntok_new -= 1
 
-    gs_old = int(math.sqrt(len(posemb_grid)))
+    gs_old = int(math.sqrt(len(posemb_grid)*hw_ratio))
     print('Resized position embedding from size:{} to size: {} with height:{} width: {}'.format(posemb.shape, posemb_new.shape, hight, width))
     posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
     posemb_grid = F.interpolate(posemb_grid, size=(hight, width), mode='bilinear')
@@ -859,7 +885,15 @@ def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rat
     model = TransReID(
         img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,\
         camera=camera, view=view, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),  sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
+
+    return model
+
+def vit_base_patch16_224_TransReID_SSL(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False, sie_xishu=1.5,**kwargs):
+    model = TransReID_SSL(
+        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,\
+        camera=camera, view=view, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
 
     return model
 
