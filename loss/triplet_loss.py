@@ -694,16 +694,36 @@ class TripletAttentionLoss_ss(object):
 
         abs = torch.abs(torch.cat((anc_pos_diff,anc_neg_diff,pos_diff,neg_diff)))
         abs_max , _ = torch.max(abs,dim=1,keepdim=True)
-        abs = 1 -(abs / (abs_max + 1e-12))
-        abs[abs < t] = -self.weight_param 
-        abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-        abs = abs.reshape(-1,B,C)
-        anc_pos_weight , anc_neg_weight, pos_weight, neg_weight = abs[0],abs[1],abs[2],abs[3]
+        # abs_norm = (abs / (abs_max+1e-12)).reshape(-1,B,C)
+        # anc_pos_weight,anc_neg_weight,pos_weight,neg_weight = 1 - abs_norm[0],abs_norm[1],1 - abs_norm[2],abs_norm[3]
+        # abs = torch.cat((anc_pos_weight,anc_neg_weight,pos_weight,neg_weight))
+        
+        abs_diff = abs / (abs_max + 1e-12)
+        abs_common = 1 - abs/ (abs_max + 1e-12)
+        abs_diff[abs_diff < t] = -self.weight_param 
+        abs_common[abs_common<t] = -self.weight_param
+        abs_diff = abs_diff + self.weight_param
+        abs_common = abs_common + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        abs_diff = abs_diff.reshape(-1,B,C)
+        abs_common = abs_common.reshape(-1,B,C)
+        
+        anc_pos_weight , anc_neg_weight, pos_weight, neg_weight = abs_diff[0],abs_diff[1],abs_diff[2],abs_diff[3]
+        anc_pos_weight_c, anc_neg_weight_c, pos_weight_c, neg_weight_c = abs_common[0],abs_common[1],abs_common[2],abs_common[3]
+        
+        dist_pos = torch.sum(
+            (cls_feat * anc_pos_weight - pos_cls * pos_weight).pow(2), dim=1
+        ).sqrt()
+        
         dist_neg = torch.sum(
             (cls_feat * anc_neg_weight - neg_cls * neg_weight ).pow(2), dim=1
         ).sqrt() # * : element wise multiplication
-        dist_pos = torch.sum(
-            (cls_feat * anc_pos_weight - pos_cls * pos_weight).pow(2), dim=1
+        
+        dist_pos_common = torch.sum(
+            (cls_feat * anc_pos_weight_c - pos_cls * pos_weight_c ).pow(2), dim=1
+        ).sqrt()
+
+        dist_neg_common = torch.sum(
+            (cls_feat * anc_neg_weight_c - neg_cls * neg_weight_c ).pow(2), dim=1
         ).sqrt()
         #################################################
         # Method 1,2 
@@ -813,12 +833,13 @@ class TripletAttentionLoss_ss(object):
 
         y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:
-            loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
+            #loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
             loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
+            loss_cls_weighted_common = self.ranking_loss(dist_neg_common,dist_pos_common,y)
             #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
             # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
             # loss = loss_cls + 0.2 * loss_gap
-            loss = loss_cls_weighted + loss_cls
+            loss =  loss_cls_weighted_common + loss_cls_weighted
         else:
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
