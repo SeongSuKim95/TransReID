@@ -90,9 +90,9 @@ class Backbone(nn.Module):
         else:
             print('unsupported backbone! but got {}'.format(model_name))
 
-        if pretrain_choice == 'imagenet':
-            self.base.load_param(model_path)
-            print('Loading pretrained ImageNet model......from {}'.format(model_path))
+        # if pretrain_choice == 'imagenet':
+        #     self.base.load_param(model_path)
+        #     print('Loading pretrained ImageNet model......from {}'.format(model_path))
 
         self.num_classes = num_classes
 

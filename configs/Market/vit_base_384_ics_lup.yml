@@ -1,5 +1,6 @@
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
+  PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
   METRIC_LOSS_TYPE: 'triplet'
   ID_LOSS_TYPE: 'softmax'
@@ -11,7 +12,7 @@ MODEL:
   DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
-  
+  STEM_CONV: True
 INPUT:
   SIZE_TRAIN: [384, 128]
   SIZE_TEST: [384, 128]
@@ -34,7 +35,7 @@ SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
   MAX_EPOCHS: 120
-  BASE_LR: 0.008
+  BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -63,5 +64,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 9999
-WANDB : False
+INDEX : 253
+WANDB : True
