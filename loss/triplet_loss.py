@@ -224,16 +224,18 @@ class TripletLoss(object):
     modified based on original triplet loss using hard example mining
     """
 
-    def __init__(self, margin=None, hard_factor=0.0):
+    def __init__(self, feat_norm, margin=None, hard_factor=0.0):
         self.margin = margin
         self.hard_factor = hard_factor
+        self.normalize_feature = feat_norm
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
             self.ranking_loss = nn.SoftMarginLoss()
 
-    def __call__(self, global_feat, labels, normalize_feature=False):
-        if normalize_feature:
+    def __call__(self, global_feat, labels):
+
+        if self.normalize_feature:
             global_feat = normalize(global_feat, axis=-1)
         dist_mat = euclidean_dist(global_feat, global_feat)
         dist_ap, dist_an = hard_example_mining(dist_mat, labels) # hard batch mining
@@ -247,7 +249,6 @@ class TripletLoss(object):
         else:
             loss = self.ranking_loss(dist_an - dist_ap, y)
         return loss, dist_ap, dist_an
-
 
 class TripletAttentionLoss(object):
     """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
@@ -577,11 +578,12 @@ class TripletAttentionLoss_ss(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, patch_ratio, num_instance, max_epoch, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
         self.patch_ratio = patch_ratio
+        self.loss_ratio = loss_ratio
         self.num_instance = num_instance
         self.max_epoch = max_epoch
         self.weight_param = nn.Parameter(
@@ -833,17 +835,20 @@ class TripletAttentionLoss_ss(object):
 
         y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:
-            #loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
+            loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
             loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
             loss_cls_weighted_common = self.ranking_loss(dist_neg_common,dist_pos_common,y)
             #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
             # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
             # loss = loss_cls + 0.2 * loss_gap
-            loss =  loss_cls_weighted_common + loss_cls_weighted
+            loss =  loss_cls_weighted_common + loss_cls_weighted + loss_cls
         else:
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
-            loss =  loss_cls
+            #loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
+            loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
+            #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
+            loss = loss_cls_weighted_common + loss_cls       
         return loss, dist_ap_cls, dist_an_cls
     # Triplet_loss = (
     #     self.ranking_loss(dist_an.detach() - dist_ap, y)

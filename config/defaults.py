@@ -140,6 +140,8 @@ _C.SOLVER.CENTER_LR = 0.5
 _C.SOLVER.CENTER_LOSS_WEIGHT = 0.0005
 # Patch ratio for Patch triplet loss
 _C.SOLVER.PATCH_RATIO = 0.3
+# Loss ratio for triplet loss
+_C.SOLVER.LOSS_RATIO = 0.3
 # Settings of weight decay
 _C.SOLVER.WEIGHT_DECAY = 0.0005
 _C.SOLVER.WEIGHT_DECAY_BIAS = 0.0005
@@ -168,6 +170,8 @@ _C.SOLVER.EVAL_PERIOD = 10
 # This is global, so if we have 8 GPUs and IMS_PER_BATCH = 128, each GPU will
 # contain 16 images per batch
 _C.SOLVER.IMS_PER_BATCH = 64
+# Use L2 normalized feature in Triplet loss
+_C.SOLVER.FEAT_NORM = False
 
 # ---------------------------------------------------------------------------- #
 # TEST

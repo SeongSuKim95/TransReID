@@ -16,8 +16,10 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     sampler = cfg.DATALOADER.SAMPLER
     loss_type = cfg.MODEL.METRIC_LOSS_TYPE
     patch_ratio = cfg.SOLVER.PATCH_RATIO
+    loss_ratio = cfg.SOLVER.LOSS_RATIO
     num_instance = cfg.DATALOADER.NUM_INSTANCE
     max_epoch = cfg.SOLVER.MAX_EPOCHS
+    feat_norm = cfg.SOLVER.FEAT_NORM
     feat_dim = 2048
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True) 
     # center loss는 parameter가 존재, nn.Module을 상속받는 class
@@ -42,20 +44,20 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                     print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
                     # triplet = TripletBranchLoss(cfg.SOLVER.MARGIN)  # triplet loss
                     # print("using triplet branch loss with margin:{}".format(cfg.SOLVER.MARGIN))
-        elif loss_type == "triplet" or loss_type == "triplet_patch" or loss_type == "triplet_patch_noncat":
+        elif loss_type in ["triplet", "triplet_patch","triplet_patch_noncat"]:
             if cfg.MODEL.NO_MARGIN:
-                triplet = TripletLoss() # __call__ return : loss, dist_ap, dist_an
+                triplet = TripletLoss(feat_norm) # __call__ return : loss, dist_ap, dist_an
                 print("using soft triplet loss for training")
             else:
-                triplet = TripletLoss(cfg.SOLVER.MARGIN)  # triplet loss
+                triplet = TripletLoss(feat_norm,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
         elif loss_type == "triplet_ss":
             if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss(patch_ratio,num_instance,max_epoch)
-                print("using soft triplet_ss attention loss for training with patch ratio : {}".format(patch_ratio))
+                triplet = TripletAttentionLoss_ss(loss_ratio,patch_ratio,num_instance,max_epoch)
+                print("using soft triplet_ss attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
             else:
-                triplet = TripletAttentionLoss_ss(patch_ratio,num_instance,max_epoch,cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet_ss attention loss with patch ratio : {}, margin:{}".format(patch_ratio,cfg.SOLVER.MARGIN))
+                triplet = TripletAttentionLoss_ss(loss_ratio,patch_ratio,num_instance,max_epoch,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))
         elif loss_type == "hnewth":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletAttentionLoss()
