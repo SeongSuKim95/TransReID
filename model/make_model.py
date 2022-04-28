@@ -152,6 +152,7 @@ class build_transformer(nn.Module): # nn.Module 상속
         self.neck_feat = cfg.TEST.NECK_FEAT
         self.explain = cfg.TEST.EXPLAIN
         self.IF_CAT = cfg.MODEL.IF_FEAT_CAT
+        self.FEAT_NORM = cfg.SOLVER.FEAT_NORM
         self.in_planes = 768
         self.cat_in_planes = 768 * 2
         print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
@@ -287,7 +288,10 @@ class build_transformer(nn.Module): # nn.Module 상속
                         cls_score = self.classifier(feat)
             # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
             # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
-            return cls_score, global_feat  # global feature for triplet loss
+            if self.FEAT_NORM : 
+                return cls_score, feat
+            else:
+                return cls_score, global_feat  # global feature for triplet loss
         #Inference
         else: # evaluation일때는 feature만 사용 (feature의 bnneck 통과여부는 선택 가능)
             if not self.explain:
@@ -521,20 +525,42 @@ class build_transformer_ml(nn.Module):
         else:
             view_num = 0
 
-        self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN, 
-                                                        sie_xishu=cfg.MODEL.SIE_COE,
-                                                        local_feature=cfg.MODEL.JPM,
-                                                        camera=camera_num,
-                                                        view=view_num,
-                                                        stride_size=cfg.MODEL.STRIDE_SIZE,
-                                                        drop_path_rate=cfg.MODEL.DROP_PATH,
-                                                        loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
-                                                        ml = cfg.MODEL.ML)
+        # backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
+        if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
+            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                            sie_xishu=cfg.MODEL.SIE_COE,
+                                                            camera=camera_num,
+                                                            view=view_num,
+                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                            drop_rate= cfg.MODEL.DROP_OUT,
+                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
+                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                            gem_pool = cfg.MODEL.GEM_POOLING,
+                                                            stem_conv = cfg.MODEL.STEM_CONV,
+                                                            ml = cfg.MODEL.ML,
+                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)
+        else :
+            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
+                                                            sie_xishu=cfg.MODEL.SIE_COE,
+                                                            camera=camera_num,
+                                                            view=view_num,
+                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
+                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
+                                                            drop_rate= cfg.MODEL.DROP_OUT,
+                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
+                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
+                                                            ml = cfg.MODEL.ML,
+                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)   
 
         if pretrain_choice == 'imagenet':
-            self.base.load_param(model_path)
+            if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
+               self.base.load_param(model_path,hw_ratio=cfg.MODEL.PRETRAIN_HW_RATIO)
+            else :
+               self.base.load_param(model_path)
             print('Loading pretrained ImageNet model......from {}'.format(model_path))
-
+            # Base model 이외에 필요한 layer? : gap, classifier, bnneck layer
+        self.gap = nn.AdaptiveAvgPool2d(1)
         block = self.base.blocks[-1] # Last encoder layer
         layer_norm = self.base.norm
 
