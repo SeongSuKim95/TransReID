@@ -66,5 +66,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 273
+INDEX : 279
 WANDB : True
