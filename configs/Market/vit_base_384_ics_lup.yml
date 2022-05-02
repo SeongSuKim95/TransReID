@@ -9,7 +9,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
@@ -35,7 +35,7 @@ SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
   MAX_EPOCHS: 150
-  BASE_LR: 0.0006
+  BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -47,7 +47,7 @@ SOLVER:
   BIAS_LR_FACTOR: 2
   PATCH_RATIO : 0.5
   LOSS_RATIO : 0.5
-  FEAT_NORM : True
+  FEAT_NORM : False
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -66,5 +66,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 9999
-WANDB : False
+INDEX : 282
+WANDB : True
