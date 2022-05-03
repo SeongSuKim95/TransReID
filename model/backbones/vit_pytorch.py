@@ -83,7 +83,6 @@ def _cfg(url='', **kwargs):
         **kwargs
     }
 
-
 class GeneralizedMeanPooling(nn.Module):
     r"""Applies a 2D power-average adaptive pooling over an input signal composed of several input planes.
     The function computed is: :math:`f(X) = pow(sum(pow(X, p)), 1/p)`
@@ -186,31 +185,66 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-class Attention_ss(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
+class Attention_relative(nn.Module):
+    def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = qk_scale or head_dim ** -0.5
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.patch_size = patch_size
+        # self.max_relative_position = 2
+
+        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads))
+        
+        coords_h = torch.arange(patch_size[1])
+        coords_w = torch.arange(patch_size[0])
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
+        relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
+        relative_coords[:, :, 1] += patch_size[0] - 1
+        relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
+        relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
+        self.register_buffer("relative_position_index", relative_position_index)
+        
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, x):
+        
+        trunc_normal_(self.relative_position_bias_table, std=.02)
+        self.softmax = nn.Softmax(dim=-1)
+    def forward(self, x, mask=None):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
+        q = q * self.scale
+        attn = (q @ k.transpose(-2, -1))
+
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
+            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
+        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        attn = attn + relative_position_bias.unsqueeze(0)
+        
+        if mask is not None:
+            nW = mask.shape[0]
+            attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
+            attn = attn.view(-1, self.num_heads, N, N)
+            attn = self.softmax(attn)
+        else:
+            attn = self.softmax(attn)
+
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
+        
 class Cross_Attention(nn.Module): # triplet_ml
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -353,12 +387,14 @@ class ML_Block(nn.Module):
         
 class Block(nn.Module):
     # Cross_Attention Block
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+    def __init__(self, dim, num_heads, rel_pos, patch_size , mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        if rel_pos :
+            self.attn = Attention_relative(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        else : 
+            self.attn = Attention(dim,num_heads=num_heads,qkv_bias=qkv_bias,qk_scale=qk_scale,attn_drop=attn_drop,proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
@@ -450,7 +486,7 @@ class PatchEmbed_SSL(nn.Module):
         # [64, 768, 24 ,8]
         x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
         # [64, 192, 768]
-        return x
+        return x,self.num_x,self.num_y
 
 class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
@@ -544,9 +580,9 @@ class TransReID_SSL(nn.Module):
         self.patch_embed = PatchEmbed_SSL(
             img_size=img_size, patch_size=patch_size, stride_size=stride_size, in_chans=in_chans,
             embed_dim=embed_dim, stem_conv = stem_conv)
-
+        patch_xy = [(img_size[1] - patch_size) // stride_size[1] + 1,(img_size[0] - patch_size) // stride_size[0] + 1]
         num_patches = self.patch_embed.num_patches
-
+        
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         
@@ -557,6 +593,7 @@ class TransReID_SSL(nn.Module):
         self.loss_type = kwargs['loss_type']
         self.ml = kwargs['ml']
         self.feat_cat = kwargs['feat_cat']
+        rel_pos = kwargs['rel_pos']
 
         self.in_planes = 768
         self.gem_pool = gem_pool
@@ -583,7 +620,7 @@ class TransReID_SSL(nn.Module):
 
         self.blocks = nn.ModuleList([
             Block(
-                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, rel_pos = rel_pos, patch_size = patch_xy, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
 
@@ -923,6 +960,104 @@ def resize_pos_embed_SSL(posemb, posemb_new, hight, width, hw_ratio):
     posemb = torch.cat([posemb_token, posemb_grid], dim=1)
     return posemb
 
+class RelativePosition(nn.Module):
+
+    def __init__(self, num_heads, max_patch_row, max_patch_col):
+        super().__init__()
+        self.num_heads = num_heads # num_heads
+        self.max_patch_row = max_patch_row
+        self.max_patch_col = max_patch_col
+        self.embeddings_table = nn.Parameter(torch.Tensor((2*max_patch_row-1)*(2*max_patch_col-1), num_heads))
+        nn.init.xavier_uniform_(self.embeddings_table)
+
+    def forward(self, length_q, length_k):
+        range_vec_q = torch.arange(length_q)
+        range_vec_k = torch.arange(length_k)
+        distance_mat = range_vec_k[None, :] - range_vec_q[:, None]
+        distance_mat_clipped = torch.clamp(distance_mat, -self.max_relative_position, self.max_relative_position)
+        final_mat = distance_mat_clipped + self.max_relative_position
+        final_mat = torch.LongTensor(final_mat).cuda()
+        embeddings = self.embeddings_table[final_mat].cuda()
+
+        return embeddings
+
+class MultiHeadAttentionLayer(nn.Module):
+    def __init__(self, hid_dim, n_heads, dropout, device):
+        super().__init__()
+        
+        assert hid_dim % n_heads == 0
+        
+        self.hid_dim = hid_dim
+        self.n_heads = n_heads
+        self.head_dim = hid_dim // n_heads
+        self.max_relative_position = 2
+
+        self.relative_position_k = RelativePosition(self.head_dim, self.max_relative_position)
+        self.relative_position_v = RelativePosition(self.head_dim, self.max_relative_position)
+
+        self.fc_q = nn.Linear(hid_dim, hid_dim)
+        self.fc_k = nn.Linear(hid_dim, hid_dim)
+        self.fc_v = nn.Linear(hid_dim, hid_dim)
+        
+        self.fc_o = nn.Linear(hid_dim, hid_dim)
+        
+        self.dropout = nn.Dropout(dropout)
+        
+        self.scale = torch.sqrt(torch.FloatTensor([self.head_dim])).to(device)
+        
+    def forward(self, query, key, value, mask = None):
+        #query = [batch size, query len, hid dim]
+        #key = [batch size, key len, hid dim]
+        #value = [batch size, value len, hid dim]
+        batch_size = query.shape[0]
+        len_k = key.shape[1]
+        len_q = query.shape[1]
+        len_v = value.shape[1]
+
+        query = self.fc_q(query)
+        key = self.fc_k(key)
+        value = self.fc_v(value)
+
+        r_q1 = query.view(batch_size, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        r_k1 = key.view(batch_size, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        attn1 = torch.matmul(r_q1, r_k1.permute(0, 1, 3, 2)) 
+
+        r_q2 = query.permute(1, 0, 2).contiguous().view(len_q, batch_size*self.n_heads, self.head_dim)
+        r_k2 = self.relative_position_k(len_q, len_k)
+        attn2 = torch.matmul(r_q2, r_k2.transpose(1, 2)).transpose(0, 1)
+        attn2 = attn2.contiguous().view(batch_size, self.n_heads, len_q, len_k)
+        attn = (attn1 + attn2) / self.scale
+
+        if mask is not None:
+            attn = attn.masked_fill(mask == 0, -1e10)
+
+        attn = self.dropout(torch.softmax(attn, dim = -1))
+
+        #attn = [batch size, n heads, query len, key len]
+        r_v1 = value.view(batch_size, -1, self.n_heads, self.head_dim).permute(0, 2, 1, 3)
+        weight1 = torch.matmul(attn, r_v1)
+        r_v2 = self.relative_position_v(len_q, len_v)
+        weight2 = attn.permute(2, 0, 1, 3).contiguous().view(len_q, batch_size*self.n_heads, len_k)
+        weight2 = torch.matmul(weight2, r_v2)
+        weight2 = weight2.transpose(0, 1).contiguous().view(batch_size, self.n_heads, len_q, self.head_dim)
+
+        x = weight1 + weight2
+        
+        #x = [batch size, n heads, query len, head dim]
+        
+        x = x.permute(0, 2, 1, 3).contiguous()
+        
+        #x = [batch size, query len, n heads, head dim]
+        
+        x = x.view(batch_size, -1, self.hid_dim)
+        
+        #x = [batch size, query len, hid dim]
+        
+        x = self.fc_o(x)
+        
+        #x = [batch size, query len, hid dim]
+        
+        return x
 
 def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False,sie_xishu=1.5, **kwargs):
     model = TransReID(

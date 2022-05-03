@@ -50,7 +50,7 @@ def do_train(cfg,
         loss_HTH_meter = AverageMeter()
         loss_TH_meter = AverageMeter()
         loss_HNTH_P2_meter = AverageMeter()
-        
+
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM) # Evaluating R1, mAP
 
     scaler = amp.GradScaler()
@@ -89,7 +89,7 @@ def do_train(cfg,
                 elif triplet_type =='hnewth_patch':
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type =='triplet_ss':
-                    loss = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])
+                    loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])
                 else : 
                     loss = loss_fn(score,feat,target)
 
@@ -118,9 +118,16 @@ def do_train(cfg,
 
             torch.cuda.synchronize() # cuda의 work group 내의 모든 wavefront속 kernel이 전부 연산을 마칠때까지 기다려줌 
             if (n_iter + 1) % log_period == 0:
-                logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
-                            .format(epoch, (n_iter + 1), len(train_loader),
-                                    loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
+
+                if triplet_type == "triplet_ss":
+
+                    logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}, Patch Ratio : {:.2f}"
+                                .format(epoch, (n_iter + 1), len(train_loader),
+                                        loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0],patch_ratio))
+                else :
+                    logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
+                                .format(epoch, (n_iter + 1), len(train_loader),
+                                        loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
                     if triplet_type == 'hnewth':
                         wandb.log({ 'Train Epoch': epoch, 
@@ -129,6 +136,12 @@ def do_train(cfg,
                                     'TH': loss_TH_meter.avg, 
                                     'HNTH_P2': loss_HNTH_P2_meter.avg, 
                                     'Learning rate': scheduler._get_lr(epoch)[0]})
+                    
+                    elif triplet_type == 'triplet_ss':
+                        wandb.log({ 'Train Epoch': epoch, 
+                                    'loss' : loss_meter.avg, 
+                                    'Learning rate': scheduler._get_lr(epoch)[0],
+                                    'Patch_ratio': patch_ratio})
                     else :
                          wandb.log({ 'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 

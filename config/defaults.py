@@ -57,6 +57,7 @@ _C.MODEL.TRANSFORMER_TYPE = 'None'
 _C.MODEL.STRIDE_SIZE = [16, 16]
 _C.MODEL.GEM_POOLING = False
 _C.MODEL.STEM_CONV = False
+_C.MODEL.REL_POS = False
 # JPM Parameter
 _C.MODEL.JPM = False
 _C.MODEL.SHIFT_NUM = 5
@@ -139,7 +140,7 @@ _C.SOLVER.CENTER_LR = 0.5
 # Balanced weight of center loss
 _C.SOLVER.CENTER_LOSS_WEIGHT = 0.0005
 # Patch ratio for Patch triplet loss
-_C.SOLVER.PATCH_RATIO = 0.3
+_C.SOLVER.PATCH_RATIO = [0.5,0.9]
 # Loss ratio for triplet loss
 _C.SOLVER.LOSS_RATIO = 0.3
 # Settings of weight decay
