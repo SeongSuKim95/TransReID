@@ -228,7 +228,7 @@ class Attention_relative(nn.Module):
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
             self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn = attn + relative_position_bias.unsqueeze(0)
+        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
         
         if mask is not None:
             nW = mask.shape[0]
@@ -486,7 +486,7 @@ class PatchEmbed_SSL(nn.Module):
         # [64, 768, 24 ,8]
         x = x.flatten(2).transpose(1, 2) # [64, 8, 768]
         # [64, 192, 768]
-        return x,self.num_x,self.num_y
+        return x
 
 class HybridEmbed(nn.Module):
     """ CNN Feature Map Embedding
@@ -584,8 +584,7 @@ class TransReID_SSL(nn.Module):
         num_patches = self.patch_embed.num_patches
         
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
-        
+
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
@@ -593,8 +592,13 @@ class TransReID_SSL(nn.Module):
         self.loss_type = kwargs['loss_type']
         self.ml = kwargs['ml']
         self.feat_cat = kwargs['feat_cat']
+        self.abs_pos = kwargs['abs_pos']
         rel_pos = kwargs['rel_pos']
-
+        if self.abs_pos :
+            self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+            trunc_normal_(self.pos_embed, std=.02)
+        else :
+            self.pos_embed = None
         self.in_planes = 768
         self.gem_pool = gem_pool
 
@@ -629,7 +633,6 @@ class TransReID_SSL(nn.Module):
         # Classifier head
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=.02)
-        trunc_normal_(self.pos_embed, std=.02)
 
         self.apply(self._init_weights)
         self.gem = GeneralizedMeanPooling()
@@ -668,7 +671,8 @@ class TransReID_SSL(nn.Module):
         elif self.view_num > 0:
             x = x + self.pos_embed + self.sie_xishu * self.sie_embed[view_id]
         else:
-            x = x + self.pos_embed
+            if self.abs_pos :
+               x = x + self.pos_embed
 
         x = self.pos_drop(x)
 
@@ -732,12 +736,14 @@ class TransReID_SSL(nn.Module):
                 # For old models that I trained prior to conv based patchification
                 O, I, H, W = self.patch_embed.proj.weight.shape
                 v = v.reshape(O, -1, H, W)
-            elif k == 'pos_embed' and v.shape != self.pos_embed.shape:
+            elif k == 'pos_embed' and (self.pos_embed is not None) and v.shape != self.pos_embed.shape:
                 # To resize pos embedding when using model at different size from pretrained weights
                 if 'distilled' in model_path:
                     print('distill need to choose right cls token in the pth')
                     v = torch.cat([v[:, 0:1], v[:, 2:]], dim=1)
                 v = resize_pos_embed_SSL(v, self.pos_embed, self.patch_embed.num_y, self.patch_embed.num_x,hw_ratio)
+            elif k == 'pos_embed' and (self.pos_embed is None):
+                continue
             try:
                 self.state_dict()[k].copy_(v)
                 count +=1
@@ -778,6 +784,7 @@ class TransReID(nn.Module):
         self.loss_type = kwargs['loss_type']
         self.ml = kwargs['ml']
         self.feat_cat = kwargs['feat_cat']
+        
         # MSMT 17 = {Cam : 15}
         # Market-1501 = {Cam : 6}
         # DukeMTMC-reID = {Cam : 8}
