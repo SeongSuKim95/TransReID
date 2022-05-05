@@ -13,7 +13,7 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : True
+  REL_POS : False
   ABS_POS : True
 
 INPUT:
@@ -37,7 +37,7 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 180
+  MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
@@ -69,5 +69,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 9999
-WANDB : False
+INDEX : 320
+WANDB : True
