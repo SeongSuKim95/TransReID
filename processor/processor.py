@@ -23,15 +23,19 @@ def do_train(cfg,
              scheduler,
              loss_fn,
              num_query, local_rank):
+
     if cfg.WANDB : 
-        wandb.init(project="TransReID", entity="panda0728")
+        wandb.init(project="TransReID", entity="panda0728",config=cfg)
         #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
+        cfg_wb = wandb.config
 
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     eval_period = cfg.SOLVER.EVAL_PERIOD
     triplet_type = cfg.MODEL.METRIC_LOSS_TYPE
-
+    REL_POS = cfg.MODEL.REL_POS
+    ABS_POS = cfg.MODEL.ABS_POS
+    num_layers = 12
     device = "cuda"
     epochs = cfg.SOLVER.MAX_EPOCHS
 
@@ -89,8 +93,18 @@ def do_train(cfg,
                 elif triplet_type =='hnewth_patch':
                     loss = loss_fn(score, feat, target, target_cam)
                 elif triplet_type =='triplet_ss':
+                    if REL_POS :
+                        bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
+                        bias_table = model.base.blocks[0].attn.state_dict()['relative_position_bias_table'].mean(-1)
+                        for i in range(1,num_layers):
+                            bias_table += model.base.blocks[i].attn.state_dict()['relative_position_bias_table'].mean(-1)
+                        bias_table /= num_layers
+                        bias_table.requires_grad = True
+                        rel_pos_bias = bias_table[bias_index.view(-1)].view(bias_index.shape[0],bias_index.shape[0])
+                    if ABS_POS :
+                        abs_pos = model.base.pos_embed[0]
                     #loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"],model.base.pos_embed[0])
-                    loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model)
+                    loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
                 else : 
                     loss = loss_fn(score,feat,target)
 

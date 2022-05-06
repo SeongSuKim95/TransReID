@@ -13,7 +13,7 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : False
+  REL_POS : True
   ABS_POS : True
 
 INPUT:
@@ -30,6 +30,7 @@ DATASETS:
   ROOT_DIR: ('/mnt/hdd_data/Dataset')
 
 DATALOADER:
+
   SAMPLER: 'softmax_triplet'
   NUM_INSTANCE: 4 # Number of samples for each ID
   NUM_WORKERS: 8
@@ -69,5 +70,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 320
-WANDB : True
+INDEX : 9999
+WANDB : False

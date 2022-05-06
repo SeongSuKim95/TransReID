@@ -600,7 +600,8 @@ class TripletAttentionLoss_ss(object):
         global_feat: torch.Tensor,
         labels: torch.Tensor,
         epoch,
-        model,
+        rel_pos_bias,
+        abs_pos,
         normalize_feature: bool = False,
     ) -> Tuple[torch.Tensor]:
         #global_feat = global_feat.contiguous()
@@ -610,14 +611,9 @@ class TripletAttentionLoss_ss(object):
         # else :
         #     patch_ratio = self.patch_ratio
         cls_feat = global_feat[:,0] # detach()
-        
         # cls_feat_detach = global_feat[:,0].detach()
         dist_mat_cls = euclidean_dist(cls_feat,cls_feat)
-        if self.rel_pos :
-            bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
-            bias_table = model.base.blocks[-1].attn.state_dict()['relative_position_bias_table'].sum(-1)
-            rel_pos_bias = bias_table[bias_index.view(-1)].view(bias_index.shape[0],bias_index.shape[0])
-        abs_pos = model.base.pos_embed[0]
+
         (
             dist_ap_cls,
             dist_an_cls,
@@ -630,6 +626,7 @@ class TripletAttentionLoss_ss(object):
         B,N,C = patch_feat_A.shape
         ID = self.num_instance
         scale = cls_feat.shape[-1] ** 0.5
+
         #################################################        
         # if normalize_feature:
         #     cls_feat = normalize_max(cls_feat, axis=-1)
@@ -663,9 +660,7 @@ class TripletAttentionLoss_ss(object):
         ind_anc_5 = ind_anc[:,:5]
 
         anc_comb = [torch.combinations(x,r=2) for x in ind_anc_5]
-        
-        # anc_max = abs_pos[ind_anc[:,0]].unsqueeze(1) @ abs_pos[ind_anc[:,1:]]
-        # pos_max = 
+
         anc_vec = []
         for i in range(B):
             if self.rel_pos :
@@ -723,7 +718,7 @@ class TripletAttentionLoss_ss(object):
         abs = torch.abs(anc_diff)
         abs_max , _ = torch.max(abs,dim=1,keepdim=True)
         abs_norm = (abs / (abs_max+1e-12))
-        #abs_common = 1 - abs_norm
+        abs_common = 1 - abs_norm
 
         # anc_pos_weight,anc_neg_weight,pos_weight,neg_weight = 1 - abs_norm[0],abs_norm[1],1 - abs_norm[2],abs_norm[3]
         # abs = torch.cat((anc_pos_weight,anc_neg_weight,pos_weight,neg_weight))
@@ -733,7 +728,7 @@ class TripletAttentionLoss_ss(object):
         abs_norm = abs_norm + self.weight_param
         #abs_common = abs_norm + self.weight_param
         anc_weight = abs_norm
-        #anc_common_weight = abs_common
+        anc_common_weight = abs_common
 
         #abs_diff = abs / (abs_max + 1e-12)
         #abs_common = 1 - abs/ (abs_max + 1e-12)
@@ -759,6 +754,7 @@ class TripletAttentionLoss_ss(object):
         dist_position = (torch.sum(
             (anc_vec - pos_vec).pow(2),dim=1
         ).sqrt()).mean()
+
         # dist_pos_common = torch.sum(
         #    (cls_feat * anc_common_weight - pos_cls * anc_common_weight).pow(2), dim=1
         # ).sqrt()
@@ -886,11 +882,11 @@ class TripletAttentionLoss_ss(object):
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             #loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
             #loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
-            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
+            loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
             loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
-            loss = loss_cls_weighted + dist_position
+            loss = loss_cls_mean + loss_cls_weighted + dist_position
         return loss, p_ratio, dist_ap_cls, dist_an_cls
     # Triplet_loss = (
     #     self.ranking_loss(dist_an.detach() - dist_ap, y)

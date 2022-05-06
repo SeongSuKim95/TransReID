@@ -1,0 +1,10 @@
+program : train.py
+method : random
+metric:
+  name : mAP
+  goal : maximize
+parameters:
+  config_file: configs/Market/vit_base_384_ics_lup.yml
+  BASE_LR :
+    min : 0.0001
+    max : 0.01
