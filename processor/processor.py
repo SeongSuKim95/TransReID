@@ -24,11 +24,6 @@ def do_train(cfg,
              loss_fn,
              num_query, local_rank):
 
-    if cfg.WANDB : 
-        wandb.init(project="TransReID", entity="panda0728",config=cfg)
-        #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
-        cfg_wb = wandb.config
-
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     eval_period = cfg.SOLVER.EVAL_PERIOD
@@ -144,21 +139,14 @@ def do_train(cfg,
                                 .format(epoch, (n_iter + 1), len(train_loader),
                                         loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
-                    if triplet_type == 'hnewth':
-                        wandb.log({ 'Train Epoch': epoch, 
-                                    'loss' : loss_meter.avg, 
-                                    'HTH' : loss_HTH_meter.avg, 
-                                    'TH': loss_TH_meter.avg, 
-                                    'HNTH_P2': loss_HNTH_P2_meter.avg, 
-                                    'Learning rate': scheduler._get_lr(epoch)[0]})
-                    
-                    elif triplet_type == 'triplet_ss':
+                    if triplet_type == 'triplet_ss':
                         wandb.log({ 'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 
                                     'Learning rate': scheduler._get_lr(epoch)[0],
-                                    'Patch_ratio': patch_ratio})
+                                    'Patch_ratio': patch_ratio,
+                                    'Acc': acc_meter.avg})
                     else :
-                         wandb.log({ 'Train Epoch': epoch, 
+                         wandb.log({'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 
                                     'Learning rate': scheduler._get_lr(epoch)[0]})
         end_time = time.time() #Epoch마다 걸리는 시간 측정      

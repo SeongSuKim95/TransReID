@@ -10,6 +10,7 @@ import torch
 import numpy as np
 import os
 import argparse
+import wandb 
 # from timm.scheduler import create_scheduler
 from config import cfg
 
@@ -26,22 +27,30 @@ if __name__ == '__main__':
     #os.environ['CUDA_LAUNCH_BLOCKING'] = "0"
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
-        "--config_file", default="", help="path to config file", type=str
+        "--config_file", default="configs/Market/vit_base_384_ics_lup.yml", help="path to config file", type=str
     )
     # config_file 이 있다면 defaults configuration에 over ride
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,
                         nargs=argparse.REMAINDER)
     # command line에서도 argument 받아서 over ride
     parser.add_argument("--local_rank", default=0, type=int)
+    parser.add_argument("--BASE_LR",default=0, type=float)
+        
     args = parser.parse_args()
-
+    args.opts.append("SOLVER.BASE_LR")
+    args.opts.append(args.BASE_LR)
+    
     if args.config_file != "":
         cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
 
     set_seed(cfg.SOLVER.SEED)
-
+    if cfg.WANDB : 
+        wandb.init(project="TransReID", entity="panda0728",config=cfg)
+        #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
+        cfg_wb = wandb.config
+    
     if cfg.MODEL.DIST_TRAIN:
         torch.cuda.set_device(args.local_rank)
 

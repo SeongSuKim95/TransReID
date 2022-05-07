@@ -652,7 +652,8 @@ class TripletAttentionLoss_ss(object):
         # neg_sim = anc_sim[ind_neg_cls]
         
         # rank = int(N* self.patch_ratio)
-        p_ratio = ((self.patch_ratio[1]-self.patch_ratio[0])/(self.max_epoch-1))*(epoch-1) + self.patch_ratio[0]
+        # p_ratio = ((self.patch_ratio[1]-self.patch_ratio[0])/(self.max_epoch-1))*(epoch-1) + self.patch_ratio[0]
+        p_ratio = self.patch_ratio[0]
         rank = int(N*p_ratio)
         val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
         val_pos, ind_pos = torch.topk(pos_sim,rank,dim=-1)
@@ -673,7 +674,8 @@ class TripletAttentionLoss_ss(object):
 
         anc_vec = torch.cat(anc_vec).reshape(B,-1)
         pos_vec = anc_vec[ind_pos_cls]
-
+        neg_vec = anc_vec[ind_neg_cls]
+        
         cat_pos = torch.cat((ind_anc,ind_pos),dim=-1)
 
         cat_pos_idx, cat_pos_cnts = [torch.unique(x,return_counts=True,dim=0)[0] for x in cat_pos],[torch.unique(x,return_counts=True,dim=0)[1] for x in cat_pos]
@@ -751,10 +753,13 @@ class TripletAttentionLoss_ss(object):
             (cls_feat * anc_weight - neg_cls * anc_weight).pow(2), dim=1
         ).sqrt() # * : element wise multiplication
         
-        dist_position = (torch.sum(
+        dist_position_pos = torch.sum(
             (anc_vec - pos_vec).pow(2),dim=1
-        ).sqrt()).mean()
+        ).sqrt()
 
+        dist_position_neg = torch.sum(
+            (anc_vec - neg_vec).pow(2),dim=1
+        ).sqrt()
         # dist_pos_common = torch.sum(
         #    (cls_feat * anc_common_weight - pos_cls * anc_common_weight).pow(2), dim=1
         # ).sqrt()

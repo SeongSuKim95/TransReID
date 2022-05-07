@@ -4,7 +4,6 @@ metric:
   name : mAP
   goal : maximize
 parameters:
-  config_file: configs/Market/vit_base_384_ics_lup.yml
   BASE_LR :
-    min : 0.0001
-    max : 0.01
+    min : 0.00001
+    max : 0.005

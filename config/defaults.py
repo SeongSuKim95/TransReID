@@ -154,7 +154,7 @@ _C.SOLVER.GAMMA = 0.1
 _C.SOLVER.STEPS = (40, 70)
 # warm up factor
 _C.SOLVER.WARMUP_FACTOR = 0.01
-#  warm up epochs
+#  warm up epochs   
 _C.SOLVER.WARMUP_EPOCHS = 5
 # method of warm up, option: 'constant','linear'
 _C.SOLVER.WARMUP_METHOD = "linear"
