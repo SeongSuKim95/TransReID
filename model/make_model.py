@@ -257,11 +257,6 @@ class build_transformer(nn.Module): # nn.Module 상속
                     #patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
                     feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
                     cls_score = self.classifier(feat)
-                elif self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE == 'triplet_patch':
-                    cls_feat = self.bottleneck(cls_feat) 
-                    feat = torch.cat((cls_feat,torch.mean(patch_feat,dim=1)),dim=1)
-                    cls_score = self.classifier(feat)
-                    return cls_score, feat
                 elif self.ID_LOSS_TYPE == 'softmax' and self.METRIC_LOSS_TYPE == 'triplet_ss':
                     cls_feat = self.bottleneck(cls_feat)
                     return cls_feat, patch_feat
@@ -273,15 +268,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                     cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
                 else:
-                    if self.METRIC_LOSS_TYPE == 'hnewth_patch':
-                        feat = self.bottleneck(global_feat[:,0]) # base model을 통과한 feature를 bottleneck layer에 통과
-                        cls_score = self.classifier(feat)
-                    elif self.METRIC_LOSS_TYPE == 'triplet_patch_noncat':
-                        cls_feat = self.bottleneck(cls_feat)
-                        cls_score = self.classifier(cls_feat)
-                        patch_feat = torch.mean(patch_feat,dim=1)
-                        return cls_score, patch_feat
-                    elif self.METRIC_LOSS_TYPE == 'triplet_ss':
+                    if self.METRIC_LOSS_TYPE in ['triplet_ss_1','triplet_ss_2']:
                         bnn_cls_feat = self.bottleneck(cls_feat)
                         cls_score = self.classifier(bnn_cls_feat)
                         return cls_score, global_feat
@@ -504,154 +491,6 @@ class build_transformer_local(nn.Module):
             self.state_dict()[i].copy_(param_dict[i])
         print('Loading pretrained model for finetuning from {}'.format(model_path))
 
-class build_transformer_ml(nn.Module):
-    def __init__(self, num_classes, camera_num, view_num, cfg, factory):
-        super(build_transformer_ml, self).__init__()
-        model_path = cfg.MODEL.PRETRAIN_PATH
-        pretrain_choice = cfg.MODEL.PRETRAIN_CHOICE
-        self.cos_layer = cfg.MODEL.COS_LAYER
-        self.neck = cfg.MODEL.NECK
-        self.neck_feat = cfg.TEST.NECK_FEAT
-        self.loss_type = cfg.MODEL.METRIC_LOSS_TYPE
-        self.in_planes = 768
-        self.ml_in_planes = 768 + 2048
-        print('using Transformer_type: {} as a backbone'.format(cfg.MODEL.TRANSFORMER_TYPE))
-
-        if cfg.MODEL.SIE_CAMERA:
-            camera_num = camera_num
-        else:
-            camera_num = 0
-
-        if cfg.MODEL.SIE_VIEW:
-            view_num = view_num
-        else:
-            view_num = 0
-
-        # backbones.vit_pytorch import vit_base_patch16_224_TransReID, vit_small_patch16_224_TransReID, deit_small_patch16_224_TransReID
-        if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
-            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
-                                                            sie_xishu=cfg.MODEL.SIE_COE,
-                                                            camera=camera_num,
-                                                            view=view_num,
-                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
-                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
-                                                            drop_rate= cfg.MODEL.DROP_OUT,
-                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
-                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
-                                                            gem_pool = cfg.MODEL.GEM_POOLING,
-                                                            stem_conv = cfg.MODEL.STEM_CONV,
-                                                            ml = cfg.MODEL.ML,
-                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)
-        else :
-            self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
-                                                            sie_xishu=cfg.MODEL.SIE_COE,
-                                                            camera=camera_num,
-                                                            view=view_num,
-                                                            stride_size=cfg.MODEL.STRIDE_SIZE,
-                                                            drop_path_rate=cfg.MODEL.DROP_PATH,
-                                                            drop_rate= cfg.MODEL.DROP_OUT,
-                                                            attn_drop_rate=cfg.MODEL.ATT_DROP_RATE,
-                                                            loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
-                                                            ml = cfg.MODEL.ML,
-                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT)   
-
-        if pretrain_choice == 'imagenet':
-            if "SSL" in cfg.MODEL.TRANSFORMER_TYPE:
-               self.base.load_param(model_path,hw_ratio=cfg.MODEL.PRETRAIN_HW_RATIO)
-            else :
-               self.base.load_param(model_path)
-            print('Loading pretrained ImageNet model......from {}'.format(model_path))
-            # Base model 이외에 필요한 layer? : gap, classifier, bnneck layer
-        self.gap = nn.AdaptiveAvgPool2d(1)
-        block = self.base.blocks[-1] # Last encoder layer
-        layer_norm = self.base.norm
-
-        self.ID_branch = nn.Sequential(
-            copy.deepcopy(block),
-            copy.deepcopy(layer_norm)
-        )
-        self.Metric_branch = self.base.ml_blocks
-
-        self.num_classes = num_classes
-        self.ID_LOSS_TYPE = cfg.MODEL.ID_LOSS_TYPE
-        if self.ID_LOSS_TYPE == 'arcface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Arcface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'cosface':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = Cosface(self.in_planes, self.num_classes,
-                                      s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'amsoftmax':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE,cfg.SOLVER.COSINE_SCALE,cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = AMSoftmax(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        elif self.ID_LOSS_TYPE == 'circle':
-            print('using {} with s:{}, m: {}'.format(self.ID_LOSS_TYPE, cfg.SOLVER.COSINE_SCALE, cfg.SOLVER.COSINE_MARGIN))
-            self.classifier = CircleLoss(self.in_planes, self.num_classes,
-                                        s=cfg.SOLVER.COSINE_SCALE, m=cfg.SOLVER.COSINE_MARGIN)
-        else:
-            if self.loss_type == 'triplet_ml_1':
-                self.classifier_ml = nn.Linear(self.ml_in_planes,num_classes,bias=False)
-                self.classifier_ml.apply(weights_init_classifier)
-            else :
-                self.classifier = nn.Linear(self.in_planes, self.num_classes, bias=False)
-                self.classifier.apply(weights_init_classifier)
-
-        self.bottleneck = nn.BatchNorm1d(self.in_planes)
-        self.bottleneck.bias.requires_grad_(False)
-        self.bottleneck.apply(weights_init_kaiming)
-
-    def forward(self, x, label=None, cam_label= None, view_label=None):  # label is unused if self.cos_layer == 'no'
-
-        features = self.base(x, cam_label=cam_label, view_label=view_label) # features.shape = [bs, #patch + 1, feat_dim]
-
-        # global branch
-        ID_feat = self.ID_branch(features) # self.b1 = last layer + layer_norm
-        global_feat = ID_feat[:, 0] # cls_token feature, [bs, feat_dim]
-        feat = self.bottleneck(global_feat)
-        if self.loss_type == "triplet_ml_1":
-            triplet_feat, p_inds, n_inds = self.Metric_branch(features,label)
-            feat_cat = torch.cat((feat,triplet_feat),dim=1)
-            
-            if self.training:
-                if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                    cls_score = self.classifier(feat, label)
-                else:
-                    cls_score = self.classifier_ml(feat_cat)
-                    # triplet_features = self.Metric_branch(features,label)
-                return cls_score, feat_cat, p_inds, n_inds # triplet features for triplet loss
-            else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
-                if self.neck_feat == 'after':
-                    return torch.cat((feat,triplet_feat),dim=1) # feat
-                else:
-                    return torch.cat((feat,triplet_feat),dim=1) # global feat
-        elif self.loss_type == "triplet_ml":
-            if self.training:
-                if self.ID_LOSS_TYPE in ('arcface', 'cosface', 'amsoftmax', 'circle'):
-                    cls_score = self.classifier(feat, label)
-                else:
-                    cls_score = self.classifier(feat)
-                    triplet_features = self.Metric_branch(features,label)
-                return cls_score, triplet_features  # triplet features for triplet loss
-            else: # Inference 시에는 global_feature랑 local feature들을 concat한 feature 사용
-                if self.neck_feat == 'after':
-                    return torch.cat((feat,triplet_feat),dim=1) # feat
-                else:
-                    return torch.cat((feat,triplet_feat),dim=1) # global feat
-    def load_param(self, trained_path):
-        param_dict = torch.load(trained_path)
-        for i in param_dict:
-            self.state_dict()[i.replace('module.', '')].copy_(param_dict[i])
-        print('Loading pretrained model from {}'.format(trained_path))
-
-    def load_param_finetune(self, model_path):
-        param_dict = torch.load(model_path)
-        for i in param_dict:
-            self.state_dict()[i].copy_(param_dict[i])
-        print('Loading pretrained model for finetuning from {}'.format(model_path))
-
-
 __factory_T_type = {
     'vit_base_patch16_224_TransReID': vit_base_patch16_224_TransReID,
     'vit_base_patch16_224_TransReID_SSL': vit_base_patch16_224_TransReID_SSL,
@@ -666,12 +505,8 @@ def make_model(cfg, num_class, camera_num, view_num):
             model = build_transformer_local(num_class, camera_num, view_num, cfg, __factory_T_type, rearrange=cfg.MODEL.RE_ARRANGE)
             print('===========building transformer with JPM module ===========')
         else: 
-            if cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml' or cfg.MODEL.METRIC_LOSS_TYPE == 'triplet_ml_1': 
-                model = build_transformer_ml(num_class, camera_num, view_num, cfg, __factory_T_type)
-                print('===========building transformer for metric learning===========')
-            else :    
-                model = build_transformer(num_class, camera_num, view_num, cfg, __factory_T_type)
-                print('===========building transformer===========')
+            model = build_transformer(num_class, camera_num, view_num, cfg, __factory_T_type)
+            print('===========building transformer===========')
     else:
         model = Backbone(num_class, cfg)
         print('===========building ResNet===========')

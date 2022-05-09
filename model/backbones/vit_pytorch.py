@@ -690,17 +690,9 @@ class TransReID_SSL(nn.Module):
         if self.feat_cat :
             return x
         else :
-            if self.loss_type == "hnewth_patch" :
-                return x
-            elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
-                return x
-            elif self.loss_type == "triplet":
+            if self.loss_type == "triplet":
                 return x[:, 0]
-            elif self.loss_type == "triplet_patch":
-                return x
-            elif self.loss_type == "triplet_patch_noncat":
-                return x
-            elif self.loss_type == "triplet_ss":
+            elif self.loss_type in ["triplet_ss_1","triplet_ss_2"]:
                 return x
             else : 
                 return x[:, 0]    

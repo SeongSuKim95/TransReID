@@ -44,12 +44,7 @@ def do_train(cfg,
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=True)
 
     loss_meter = AverageMeter()
-    acc_meter = AverageMeter() # Averaging acc, loss
-    if "hnewth" in cfg.MODEL.METRIC_LOSS_TYPE : 
-        loss_HTH_meter = AverageMeter()
-        loss_TH_meter = AverageMeter()
-        loss_HNTH_P2_meter = AverageMeter()
-
+    acc_meter = AverageMeter() # Averaging acc, loss 
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM) # Evaluating R1, mAP
 
     scaler = amp.GradScaler()
@@ -71,23 +66,15 @@ def do_train(cfg,
             with amp.autocast(enabled=True):
                 # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
                 # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산                
-                if triplet_type == 'triplet_ml_1':
-                    score, feat, p_inds, n_inds = model(img, target, cam_label=target_cam, view_label=target_view)
-                else :
-                    score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
+
+                score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
                 # JPM을 사용할 경우
                 # score, feat의 개수는 JPM branch 개수와 같다
                 # score.size = [#JPM,bs,train_ID] [5,64,751]
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
-                if triplet_type in ['triplet','triplet_ml','triplet_patch', 'triplet_patch_noncat']:
-                    loss = loss_fn(score, feat, target, target_cam)
-                elif triplet_type == 'triplet_ml_1':
-                    loss = loss_fn(score, feat, p_inds, n_inds, target, target_cam)
-                elif triplet_type == 'hnewth':
-                    loss, HTH, TH, HNTH_P2  = loss_fn(score, feat, target, target_cam, model.classifier.state_dict()["weight"])
-                elif triplet_type =='hnewth_patch':
-                    loss = loss_fn(score, feat, target, target_cam)
-                elif triplet_type =='triplet_ss':
+                if triplet_type in ['triplet_ss_1','triplet_ss_2']:
+                    loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])                    
+                elif triplet_type =='triplet_ss_pos':
                     if REL_POS :
                         bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
                         bias_table = model.base.blocks[0].attn.state_dict()['relative_position_bias_table'].mean(-1)
@@ -98,7 +85,6 @@ def do_train(cfg,
                         rel_pos_bias = bias_table[bias_index.view(-1)].view(bias_index.shape[0],bias_index.shape[0])
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
-                    #loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"],model.base.pos_embed[0])
                     loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
                 else : 
                     loss = loss_fn(score,feat,target)
@@ -119,17 +105,12 @@ def do_train(cfg,
                 acc = (score.max(1)[1] == target).float().mean()
 
             loss_meter.update(loss.item(), img.shape[0])
-            if triplet_type == 'hnewth':
-                loss_HTH_meter.update(HTH.item(), img.shape[0])
-                loss_TH_meter.update(TH.item(), img.shape[0])
-                loss_HNTH_P2_meter.update(HNTH_P2.item(), img.shape[0])
-
             acc_meter.update(acc, 1)
 
             torch.cuda.synchronize() # cuda의 work group 내의 모든 wavefront속 kernel이 전부 연산을 마칠때까지 기다려줌 
             if (n_iter + 1) % log_period == 0:
 
-                if triplet_type == "triplet_ss":
+                if triplet_type in ['triplet_ss_1','triplet_ss_2','triplet_ss_pos']:
 
                     logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}, Patch Ratio : {:.2f}"
                                 .format(epoch, (n_iter + 1), len(train_loader),
@@ -139,7 +120,7 @@ def do_train(cfg,
                                 .format(epoch, (n_iter + 1), len(train_loader),
                                         loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
-                    if triplet_type == 'triplet_ss':
+                    if triplet_type in ['triplet_ss_1','triplet_ss_2','triplet_ss_pos']:
                         wandb.log({ 'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 
                                     'Learning rate': scheduler._get_lr(epoch)[0],
@@ -190,10 +171,7 @@ def do_train(cfg,
                         img = img.to(device)
                         camids = camids.to(device)
                         target_view = target_view.to(device)
-                        if triplet_type == "hnewth_patch":
-                            feat = model(img, cam_label=camids, view_label=target_view)[:,0]
-                        else :
-                            feat = model(img, cam_label=camids, view_label=target_view)
+                        feat = model(img, cam_label=camids, view_label=target_view)
                         evaluator.update((feat, vid, camid))
                 cmc, mAP, _, _, _, _, _, _, _, _, _, _  = evaluator.compute()
                 logger.info("Validation Results - Epoch: {}".format(epoch))

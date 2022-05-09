@@ -37,8 +37,8 @@ if __name__ == '__main__':
     parser.add_argument("--BASE_LR",default=0, type=float)
         
     args = parser.parse_args()
-    args.opts.append("SOLVER.BASE_LR")
-    args.opts.append(args.BASE_LR)
+    # args.opts.append("SOLVER.BASE_LR")
+    # args.opts.append(args.BASE_LR)
     
     if args.config_file != "":
         cfg.merge_from_file(args.config_file)
@@ -77,7 +77,8 @@ if __name__ == '__main__':
     train_loader, train_loader_normal, val_loader, num_query, num_classes, camera_num, view_num, _, _, _, _ = make_dataloader(cfg)
     
     model = make_model(cfg, num_class=num_classes, camera_num=camera_num, view_num = view_num)
-
+    # model_parameters = filter(lambda p: p.requires_grad, model.parameters())
+    # params = sum([np.prod(p.size()) for p in model_parameters])
     loss_func, center_criterion = make_loss(cfg, num_classes=num_classes)
 
     optimizer, optimizer_center = make_optimizer(cfg, model, center_criterion)

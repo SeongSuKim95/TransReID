@@ -6,4 +6,4 @@ metric:
 parameters:
   BASE_LR :
     min : 0.00001
-    max : 0.005
+    max : 0.003
