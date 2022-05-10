@@ -27,7 +27,7 @@ if __name__ == '__main__':
     #os.environ['CUDA_LAUNCH_BLOCKING'] = "0"
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
-        "--config_file", default="configs/Market/vit_base_384_ics_lup.yml", help="path to config file", type=str
+        "--config_file", default="configs/Market/vit_base_384_ics_lup_2.yml", help="path to config file", type=str
     )
     # config_file 이 있다면 defaults configuration에 over ride
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,

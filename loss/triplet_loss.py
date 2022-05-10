@@ -1165,4 +1165,8 @@ class TripletAttentionLoss_ss_2(object):
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
             loss = loss_cls_weighted + loss_cls
+        if torch.isnan(loss) or torch.isinf(loss) :
+            wandb.finish()
+        # elif epoch == 41 :
+        #     wandb.finish()
         return loss, p_ratio, dist_ap_cls, dist_an_cls
