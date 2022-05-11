@@ -74,7 +74,7 @@ def do_train(cfg,
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
                 if triplet_type in ['triplet_ss_1','triplet_ss_2']:
                     loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])                    
-                elif triplet_type =='triplet_ss_pos':
+                elif triplet_type in ['triplet_ss_pos_1','triplet_ss_pos_2','triplet_ss_pos_3','triplet_ss_pos_4']:
                     if REL_POS :
                         bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
                         bias_table = model.base.blocks[0].attn.state_dict()['relative_position_bias_table'].mean(-1)
@@ -85,7 +85,11 @@ def do_train(cfg,
                         rel_pos_bias = bias_table[bias_index.view(-1)].view(bias_index.shape[0],bias_index.shape[0])
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
-                    loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
+                    if triplet_type == 'triplet_ss_pos_4':
+                        loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
+                    else :
+                        loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
+               
                 else : 
                     loss = loss_fn(score,feat,target)
 

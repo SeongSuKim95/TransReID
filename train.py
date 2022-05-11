@@ -34,11 +34,11 @@ if __name__ == '__main__':
                         nargs=argparse.REMAINDER)
     # command line에서도 argument 받아서 over ride
     parser.add_argument("--local_rank", default=0, type=int)
-    parser.add_argument("--BASE_LR",default=0, type=float)
+    # parser.add_argument("--BASE_LR",default=0, type=float)
         
     args = parser.parse_args()
-    args.opts.append("SOLVER.BASE_LR")
-    args.opts.append(args.BASE_LR)
+    # args.opts.append("SOLVER.BASE_LR")
+    # args.opts.append(args.BASE_LR)
     
     if args.config_file != "":
         cfg.merge_from_file(args.config_file)

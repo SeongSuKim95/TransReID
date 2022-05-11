@@ -694,9 +694,8 @@ class TransReID_SSL(nn.Module):
                 return x[:, 0]
             elif self.loss_type in ["triplet_ss_1","triplet_ss_2"]:
                 return x
-            else : 
-                return x[:, 0]    
-
+            elif self.loss_type in ["triplet_ss_pos_1","triplet_ss_pos_2","triplet_ss_pos_3","triplet_ss_pos_4"] : 
+                return x
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
         return x

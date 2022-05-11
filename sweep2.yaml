@@ -1,9 +1,0 @@
-program : train2.py
-method : random
-metric:
-  name : mAP
-  goal : maximize
-parameters:
-  BASE_LR :
-    min : 0.000001
-    max : 0.004

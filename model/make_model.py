@@ -272,6 +272,10 @@ class build_transformer(nn.Module): # nn.Module 상속
                         bnn_cls_feat = self.bottleneck(cls_feat)
                         cls_score = self.classifier(bnn_cls_feat)
                         return cls_score, global_feat
+                    elif self.METRIC_LOSS_TYPE in ['triplet_ss_pos_1','triplet_ss_pos_2','triplet_ss_pos_3','triplet_ss_pos_4']:
+                        bnn_cls_feat = self.bottleneck(cls_feat)
+                        cls_score = self.classifier(bnn_cls_feat)
+                        return cls_score, global_feat
                     else :
                         feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                         cls_score = self.classifier(feat)

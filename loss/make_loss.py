@@ -6,7 +6,7 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import TripletAttentionLoss_ss, TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2
+from .triplet_loss import  TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2, TripletAttentionLoss_ss_pos_1, TripletAttentionLoss_ss_pos_2,TripletAttentionLoss_ss_pos_3, TripletAttentionLoss_ss_pos_4
 from .center_loss import CenterLoss
 import torch
 from typing import Tuple
@@ -33,13 +33,6 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                 triplet = TripletLoss(feat_norm,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using triplet loss with margin:{}".format(cfg.SOLVER.MARGIN))
-        elif loss_type == "triplet_ss":
-            if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
-                print("using soft triplet_ss attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
-            else:
-                triplet = TripletAttentionLoss_ss(loss_ratio,patch_ratio,num_instance,max_epoch,cfg.SOLVER.MARGIN,rel_pos)  # triplet loss
-                print("using soft triplet_ss attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))
         elif loss_type == "triplet_ss_1":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletAttentionLoss_ss_1(loss_ratio,patch_ratio,num_instance,max_epoch)
@@ -54,6 +47,34 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                 triplet = TripletAttentionLoss_ss_2(loss_ratio,patch_ratio,num_instance,max_epoch,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using soft triplet_ss_2 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))        
+        elif loss_type == "triplet_ss_pos_1":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss_pos_1(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
+                print("using soft triplet_pos_1 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
+            else:
+                triplet = TripletAttentionLoss_ss_pos_1(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_pos_1 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))        
+        elif loss_type == "triplet_ss_pos_2":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss_pos_2(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
+                print("using soft triplet_ss_pos_2 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
+            else:
+                triplet = TripletAttentionLoss_ss_pos_2(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss_pos_2 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))                
+        elif loss_type == "triplet_ss_pos_3":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss_pos_3(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
+                print("using soft triplet_ss_pos_3 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
+            else:
+                triplet = TripletAttentionLoss_ss_pos_3(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss_pos_3 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))         
+        elif loss_type == "triplet_ss_pos_4":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss_pos_4(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
+                print("using soft triplet_ss_pos_4 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
+            else:
+                triplet = TripletAttentionLoss_ss_pos_4(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss_pos_4 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))                       
         else:
             print('expected METRIC_LOSS_TYPE should be triplet/triplet_ss/triplet_ss_1/triplet_ss_2''but got {}'.format(loss_type))
         
@@ -102,7 +123,45 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
 
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
-        elif loss_type == 'triplet_ss':
+        
+        elif loss_type in ['triplet_ss_1','triplet_ss_2']:
+            def loss_func(score, feat,target,target_cam,epoch,cls_param):
+            #def loss_func(score, feat,target,target_cam,epoch,rel_pos_bias,abs_pos):
+                if cfg.MODEL.IF_LABELSMOOTH == 'on':
+                    if isinstance(score, list): 
+                        ID_LOSS = [xent(scor, target) for scor in score[1:]]
+                        ID_LOSS = sum(ID_LOSS) / len(ID_LOSS)
+                        ID_LOSS = 0.5 * ID_LOSS + 0.5 * xent(score[0], target)
+                    else:
+                        ID_LOSS = xent(score, target) # LabelSmooth
+
+                    if isinstance(feat, list):
+                        TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]] # Equation (4)
+                        TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
+                        TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
+                    else:
+                        TRI_LOSS = triplet(feat, target)[0]
+
+                    return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
+                            cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS
+                else:
+                    if isinstance(score, list):
+                        ID_LOSS = [F.cross_entropy(scor, target) for scor in score[1:]]
+                        ID_LOSS = sum(ID_LOSS) / len(ID_LOSS)
+                        ID_LOSS = 0.5 * ID_LOSS + 0.5 * F.cross_entropy(score[0], target)
+                    else:
+                        ID_LOSS = F.cross_entropy(score, target)
+
+                    if isinstance(feat, list): 
+                        TRI_LOSS = [triplet(feats, target)[0] for feats in feat[1:]]
+                        TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
+                        TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
+                    else:
+                        TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, cls_param)[0] , triplet(feat, target, epoch, cls_param)[1]
+                    return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
+                            cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
+
+        elif loss_type in ['triplet_ss_pos_1','triplet_ss_pos_2','triplet_ss_pos_3']:
             #def loss_func(score, feat,target,target_cam,epoch,cls_param,pos_param):
             def loss_func(score, feat,target,target_cam,epoch,rel_pos_bias,abs_pos):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
@@ -139,10 +198,9 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                          TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, rel_pos_bias, abs_pos)[0] , triplet(feat, target, epoch, rel_pos_bias, abs_pos)[1]
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
-        
-        elif loss_type in ['triplet_ss_1','triplet_ss_2']:
-            def loss_func(score, feat,target,target_cam,epoch,cls_param):
-            #def loss_func(score, feat,target,target_cam,epoch,rel_pos_bias,abs_pos):
+        elif loss_type == 'triplet_ss_pos_4':
+            #def loss_func(score, feat,target,target_cam,epoch,cls_param,pos_param):
+            def loss_func(score, feat,target,target_cam,epoch,rel_pos_bias,abs_pos,cls_param):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
                     if isinstance(score, list): 
                         ID_LOSS = [xent(scor, target) for scor in score[1:]]
@@ -173,7 +231,8 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
                         TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                        TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, cls_param)[0] , triplet(feat, target, epoch, cls_param)[1]
+                        #TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, cls_param, pos_param)[0] , triplet(feat, target, epoch, cls_param, pos_param)[1]
+                         TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, rel_pos_bias, abs_pos,cls_param)[0] , triplet(feat, target, epoch, rel_pos_bias, abs_pos,cls_param)[1]
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
         else:
