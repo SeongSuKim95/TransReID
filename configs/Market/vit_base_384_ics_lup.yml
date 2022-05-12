@@ -2,7 +2,17 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_3'
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_5'
+  
+  # triplet_ss_1 : loss_abs(CLS) version
+  # triplet_ss_2 : loss_abs(cls_param) 0509
+
+  # triplet_ss_pos_1 : loss_cls_mean + loss_abs(CLS) + loss_dist
+  # triplet_ss_pos_2 : loss_cls_mean + loss_abs(CLS) + JSD
+  # triplet_ss_pos_3 : triplet + JSD(CLS)
+  # triplet_ss_pos_4 : triplet + JSD(cls_param)
+  # triplet_ss_pos_5 : loss_abs(CLS) or triplet + JSD(head_wise)
+
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -68,5 +78,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 335
+INDEX : 343
 WANDB : True

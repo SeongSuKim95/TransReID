@@ -31,6 +31,7 @@ def do_train(cfg,
     REL_POS = cfg.MODEL.REL_POS
     ABS_POS = cfg.MODEL.ABS_POS
     num_layers = 12
+    num_heads = 12
     device = "cuda"
     epochs = cfg.SOLVER.MAX_EPOCHS
 
@@ -74,15 +75,21 @@ def do_train(cfg,
                 # feat.size = [#JPM,bs,feat_size] [5,64,768]
                 if triplet_type in ['triplet_ss_1','triplet_ss_2']:
                     loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,model.classifier.state_dict()["weight"])                    
-                elif triplet_type in ['triplet_ss_pos_1','triplet_ss_pos_2','triplet_ss_pos_3','triplet_ss_pos_4']:
+                elif 'pos' in triplet_type:
                     if REL_POS :
                         bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
-                        bias_table = model.base.blocks[0].attn.state_dict()['relative_position_bias_table'].mean(-1)
-                        for i in range(1,num_layers):
-                            bias_table += model.base.blocks[i].attn.state_dict()['relative_position_bias_table'].mean(-1)
-                        bias_table /= num_layers
-                        bias_table.requires_grad = True
-                        rel_pos_bias = bias_table[bias_index.view(-1)].view(bias_index.shape[0],bias_index.shape[0])
+                        patch_num = bias_index.size(0)
+                        bias_index = bias_index.view(-1)
+                        # bias_table = model.base.blocks[0].attn.state_dict()['relative_position_bias_table'].mean(-1)
+                        # for i in range(1,num_layers):
+                        #     bias_table += model.base.blocks[i].attn.state_dict()['relative_position_bias_table'].mean(-1)
+                        # bias_table /= num_layers
+                        table_list = []
+                        for i in range(num_layers):
+                            table_list.append(model.base.blocks[i].attn.state_dict()['relative_position_bias_table'])
+                        bias_table = torch.cat(table_list,1).T
+                        bias_index_dummy = bias_index.unsqueeze(0).expand(bias_table.size(0),bias_index.size(0))
+                        rel_pos_bias = bias_table.gather(1,bias_index_dummy).reshape(-1,patch_num,patch_num)
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
                     if triplet_type == 'triplet_ss_pos_4':

@@ -434,7 +434,7 @@ class TripletAttentionLoss_ss_pos_2(object):
         val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
         val_pos, ind_pos = torch.topk(pos_sim,rank,dim=-1)
         
-        ind_anc_5 = ind_anc[:,:10]
+        ind_anc_5 = ind_anc[:,:5]
 
         anc_comb = [torch.combinations(x,r=2) for x in ind_anc_5]
 
@@ -530,119 +530,220 @@ class TripletAttentionLoss_ss_pos_2(object):
             (cls_feat * anc_weight - neg_cls * anc_weight).pow(2), dim=1
         ).sqrt() # * : element wise multiplication
         
-        # dist_position_pos = torch.sum(
-        #     (anc_vec - pos_vec).pow(2),dim=1
-        # ).sqrt()
+        dist_ap_cls *= (1.0 + self.hard_factor)
+        dist_an_cls *= (1.0 + self.hard_factor)
 
-        # dist_position_neg = torch.sum(
-        #     (anc_vec - neg_vec).pow(2),dim=1
-        # ).sqrt()
-        # dist_pos_common = torch.sum(
-        #    (cls_feat * anc_common_weight - pos_cls * anc_common_weight).pow(2), dim=1
-        # ).sqrt()
+        # dist_ap = torch.gather(dist_mat,1,ind_pos_cls.unsqueeze(-1))
+        # dist_an = torch.gather(dist_mat,1,ind_neg_cls.unsqueeze(-1))
+        # dist_ap = dist_ap.squeeze(1)
+        # dist_an = dist_an.squeeze(1)
 
-        # dist_neg_common = torch.sum(
-        #     (cls_feat * anc_common_weight - neg_cls * anc_common_weight).pow(2), dim=1
-        # ).sqrt()
+        y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
+        if self.margin is not None:
+            loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
+            loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
+            #loss_cls_weighted_common = self.ranking_loss(dist_neg_common,dist_pos_common,y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
+            # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
+            # loss = loss_cls + 0.2 * loss_gap
+            #loss =  loss_cls_weighted_common + loss_cls_weighted + loss_cls
+        else:
+            #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
+            loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
+            #loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
+            #loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
+            #loss_dist = self.ranking_loss(dist_position_neg - dist_position_pos,y)
+            #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
+            #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
+            loss = loss_cls + JSD_loss
+            
+            if torch.isnan(loss) or torch.isinf(loss) :
+                wandb.finish()
 
+        return loss, p_ratio, dist_ap_cls, dist_an_cls
+class TripletAttentionLoss_ss_pos_5(object):
+    """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
+    Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
+    Loss for Person Re-Identification'."""
+
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, margin: Optional[float] = None, hard_factor=0.0):
+        self.margin = margin
+        self.attn_loss = nn.MSELoss()
+        self.hard_factor = hard_factor
+        self.patch_ratio = patch_ratio
+        self.loss_ratio = loss_ratio
+        self.num_instance = num_instance
+        self.max_epoch = max_epoch
+        self.rel_pos = rel_pos
+        self.JSD_loss = JSD()
+        self.weight_param = nn.Parameter(
+            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
+        )
+        if margin is not None:
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        else:
+            self.ranking_loss = nn.SoftMarginLoss()
+
+    def __call__(
+        self,
+        global_feat: torch.Tensor,
+        labels: torch.Tensor,
+        epoch,
+        rel_pos_bias,
+        abs_pos,
+        normalize_feature: bool = False,
+    ) -> Tuple[torch.Tensor]:
+        #global_feat = global_feat.contiguous()
+        t = 0
+        # if epoch >= self.max_epoch * 0.5 :
+        #     patch_ratio = self.patch_ratio * 0.5
+        # else :
+        #     patch_ratio = self.patch_ratio
+        cls_feat = global_feat[:,0] # detach()
+        # cls_feat_detach = global_feat[:,0].detach()
+        dist_mat_cls = euclidean_dist(cls_feat,cls_feat)
+
+        (
+            dist_ap_cls,
+            dist_an_cls,
+            dist_an_mean_cls,
+            ind_pos_cls,
+            ind_neg_cls,
+        ) = hard_example_mining_with_inds(dist_mat_cls, labels)
+
+        patch_feat_A = global_feat[:,1:]
+        B,N,C = patch_feat_A.shape
+        ID = self.num_instance
+        scale = cls_feat.shape[-1] ** 0.5
+
+        #################################################        
+        # if normalize_feature:
+        #     cls_feat = normalize_max(cls_feat, axis=-1)
+        # dist_mat = euclidean_dist(cls_feat, cls_feat)
+        # cls_similarity = (cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1)/scale
+        # cls_similarity = cls_similarity.softmax(-1)
+        # dist_mat = cosine_distance(global_feat,global_feat)
         #################################################
-        # Method 1,2 
+        
+        # Method 5
+        pos_cls = cls_feat[ind_pos_cls]
+        neg_cls = cls_feat[ind_neg_cls]
 
-        # cls_feat_b = cls_feat.expand(ID,B,C).reshape((ID,-1,ID,C)).transpose(0,1).reshape(-1,C)
-        # patch_feat_A_b = patch_feat_A.expand(ID,B,N,C).transpose(0,1).reshape(-1,N,C)
-        # cls_similarity_b = (cls_feat_b.unsqueeze(1) @ patch_feat_A_b.transpose(-1,-2)).squeeze(1)/scale
-        # rank = int(N*self.patch_ratio)
-        # val,idx = torch.topk(cls_similarity_b.reshape(B,-1,N),rank,dim=-1)
+        anc_sim = (((cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1) 
+        pos_sim = (((pos_cls.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1)
+        
+        anc_patch_norm = torch.norm(torch.sum(anc_sim.unsqueeze(-1)*patch_feat_A,dim=1),p=2,dim=1)
+        cls_feat_norm = torch.norm(cls_feat,p=2,dim=1)
+        anc_ratio = (cls_feat_norm / anc_patch_norm).unsqueeze(-1)
+        
+        # Performance Index 242
+        # pos_sim = anc_sim[ind_pos_cls]
+        # neg_sim = anc_sim[ind_neg_cls]
+        
+        # rank = int(N* self.patch_ratio)
+        # p_ratio = ((self.patch_ratio[1]-self.patch_ratio[0])/(self.max_epoch-1))*(epoch-1) + self.patch_ratio[0]
+        p_ratio = self.patch_ratio[0]
+        rank = int(N*p_ratio)
+        val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
+        val_pos, ind_pos = torch.topk(pos_sim,rank,dim=-1)
+        
+        ind_anc_5 = ind_anc[:,:5]
 
-        # # Method 4
-        # # rank = int(N*self.patch_ratio)
-        # # cls_similarity_b = cls_similarity_b.reshape(B,ID,N).sum(dim=1)
-        # # val,idx = torch.topk(cls_similarity_b,rank,dim=1)
-        # # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
-        # # out = patch_feat_A.gather(1,dummy_idx)
-        # # max_val, _ = torch.max(val,dim=-1,keepdim=True)
-        # # val = val / (max_val + 1e-12)
+        anc_comb = [torch.combinations(x,r=2) for x in ind_anc_5]
+        anc_comb = torch.cat(anc_comb,0).reshape(B,-1,2)
+        anc_vec = []
+        for i in range(B):
+            if self.rel_pos :
+                rel_val_anc = torch.stack([rel_pos_bias[:,x[0],x[1]] for x in anc_comb[i]])
+                abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
+                abs_val_anc = abs_val_anc.unsqueeze(1).expand(rel_val_anc.size(0),rel_val_anc.size(1))
+                anc_vec.append(rel_val_anc+abs_val_anc)
+            else :
+                abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
+                anc_vec.append(abs_val_anc)
+        anc_vec = (torch.cat(anc_vec).reshape(B,anc_comb.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1)
+        pos_vec = anc_vec[ind_pos_cls]
+        JSD_loss = self.JSD_loss(anc_vec,pos_vec)
+
+        #neg_vec = anc_vec[ind_neg_cls]
         
-        # # val[val< t] = -self.weight_param  
-        # # val = val + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        cat_pos = torch.cat((ind_anc,ind_pos),dim=-1)
+
+        cat_pos_idx, cat_pos_cnts = [torch.unique(x,return_counts=True,dim=0)[0] for x in cat_pos],[torch.unique(x,return_counts=True,dim=0)[1] for x in cat_pos]
+        intersect_pos = [cat_pos_idx[i][cat_pos_cnts[i]!=1] for i in range(B)]
+        patches_pos = [patch_feat_A[i][intersect_pos[i]] for i in range(B)]
+         
+        # anc_pos_val = [anc_sim[i][intersect_pos[i]]/anc_sim[i][intersect_pos[i]].max()for i in range(B)]
+        # anc_neg_val = [anc_sim[i][intersect_neg[i]]/anc_sim[i][intersect_neg[i]].max() for i in range(B)]
+         
+        # pos_val = [pos_sim[i][intersect_pos[i]]/pos_sim[i][intersect_pos[i]].max() for i in range(B)]
+        # neg_val = [neg_sim[i][intersect_neg[i]]/neg_sim[i][intersect_neg[i]].max() for i in range(B)]
+
+        anc_pos_val = [anc_sim[i][intersect_pos[i]] for i in range(B)]
         
-        # # # val = val.softmax(-1)
-        # # out = torch.mean((out*val.unsqueeze(-1)),dim=1)
-       
-        # # Method 1-1
-        # val = val.reshape(B,-1)
-        # idx = idx.reshape(B,-1)
-        # dummy_idx = idx.unsqueeze(2).expand(idx.size(0),idx.size(1),patch_feat_A.size(2))
-        # out = patch_feat_A.gather(1,dummy_idx) # gather corresponding patch
-        # max , _ = torch.max(val,dim=1,keepdim=True)
-        # val = val / (max + 1e-12)
-        # out = torch.mean((out * val.unsqueeze(-1)),dim=1) # weighted summation of gathered patch
+        # cat_all = torch.cat((ind_pos,ind_neg,ind_anc),dim=-1)
+        # cat_all_idx, cat_all_cnts = [torch.unique(x,return_counts=True,dim=0)[0] for x in cat_all],[torch.unique(x,return_counts=True,dim=0)[1] for x in cat_all]
         
-        # # Method 1-2
-        # cls_feat_detach = cls_feat.detach()
-        # out_detach = out.detach()
+        # intersect_all = [cat_all_idx[i][cat_all_cnts[i]==3] for i in range(B)]
+        # patches_all = [patch_feat_A[i][intersect_all[i]] for i in range(B)]
+        # anc_all_val = [anc_sim[i][intersect_all[i]]/anc_sim[i][intersect_all[i]].max() for i in range(B)]
+        
+        anc_pos_weighted_patches = torch.stack([torch.sum(patches_pos[i]*anc_pos_val[i].unsqueeze(-1),dim=0) for i in range(B)]) # Anc Pos common patch - for Anc
+        
+        # cls_feat_detach = cls_feat
+        # anc_pos_detach = anc_pos_weighted_patches
+        # anc_neg_detach = anc_neg_weighted_patches
+        # pos_detach = pos_weighted_patches
+        # neg_detach = neg_weighted_patches
+
         # cls_norm = torch.norm(cls_feat_detach,p=2,dim=1)
-        # out_norm = torch.norm(out_detach,p=2,dim=1)
+        # anc_pos_norm = torch.norm(anc_pos_weighted,p=2,dim=1)
+        # anc_neg_norm = torch.norm(anc_neg_weighted,p=2,dim=1)
+        # pos_norm = torch.norm(pos_detach,p=2,dim=1)
+        # neg_norm = torch.norm(neg_detach,p=2,dim=1)
 
-        # norm_ratio = (cls_norm / out_norm).unsqueeze(-1)
+        # anc_pos_norm_ratio = (cls_norm / anc_pos_norm).unsqueeze(-1)
+        # anc_neg_norm_ratio = (cls_norm / anc_neg_norm).unsqueeze(-1)
+        # pos_norm_ratio = (cls_norm[ind_pos_cls] / pos_norm).unsqueeze(-1)
+        # neg_norm_ratio = (cls_norm[ind_neg_cls] / neg_norm).unsqueeze(-1)
+
+        anc_diff = (cls_feat - anc_pos_weighted_patches * anc_ratio)
+        abs = torch.abs(anc_diff)
+        abs_max , _ = torch.max(abs,dim=1,keepdim=True)
+        abs_norm = (abs / (abs_max+1e-12))
+        abs_common = 1 - abs_norm
+
+        # anc_pos_weight,anc_neg_weight,pos_weight,neg_weight = 1 - abs_norm[0],abs_norm[1],1 - abs_norm[2],abs_norm[3]
+        # abs = torch.cat((anc_pos_weight,anc_neg_weight,pos_weight,neg_weight))
+        abs_norm[abs_norm<t] = -self.weight_param
+        #abs_common[abs_common<t] = -self.weight_param
         
-        # diff = (cls_feat - out * norm_ratio)
+        abs_norm = abs_norm + self.weight_param
+        #abs_common = abs_norm + self.weight_param
+        anc_weight = abs_norm
 
-        # abs = torch.abs(diff)
-        # abs_max , _ = torch.max(abs,dim=1,keepdim=True)
-        # abs = 1 -(abs / (abs_max + 1e-12))
-        # abs[abs < t] = -self.weight_param 
-        # abs = abs + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-        # dist_neg = torch.sum(
-        #     (cls_feat * abs - cls_feat[ind_neg_cls] * abs ).pow(2), dim=1
-        # ).sqrt() # * : element wise multiplication
-        # dist_pos = torch.sum(
-        #     (cls_feat * abs  - cls_feat[ind_pos_cls] * abs).pow(2), dim=1
-        # ).sqrt()
-        ################################################
-
-        # Method 2
-        # val = val.squeeze(-1)
-        # max_val, _ = torch.max(val,dim=-1,keepdim=True)
-        # max = max_val.squeeze(-1).sum(-1).unsqueeze(-1)
-        # val = val.reshape(B,-1)/(max + 1e-12)
-        # out = torch.mean((out * val.unsqueeze(-1)),dim=1)
+        #abs_diff = abs / (abs_max + 1e-12)
+        #abs_common = 1 - abs/ (abs_max + 1e-12)
+        #abs_diff[abs_diff < 
+        # t] = -self.weight_param 
+        #abs_common[abs_common<t] = -self.weight_param
+        #abs_diff = abs_diff + self.weight_param
+        #abs_common = abs_common + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
+        #abs_diff = abs_diff.reshape(-1,B,C)
+        #abs_common = abs_common.reshape(-1,B,C)
         
-        # Method 3
-        # Anchor_rank = int(N*self.patch_ratio*2)
-        # Positive_rank = int(N*self.patch_ratio)
-        # mask = torch.zeros(ID*ID,ID*ID,dtype=torch.bool)
-        # index = torch.arange(0,B//ID,ID+1)
-        # mask[:,index] = True
-        # mask = mask.view(-1)
-        # Anchor_similarity = cls_similarity_b[mask]
-        # Positive_similarity = cls_similarity_b[~mask]
-        # anchor_val,anchor_idx = torch.topk(Anchor_similarity,Anchor_rank,dim=-1)
-        # positive_val, positive_idx = torch.topk(Positive_similarity,Positive_rank,dim=-1)
-        # positive_val = positive_val.reshape(B,-1)
-        # positive_idx = positive_idx.reshape(B,-1)
-
-        # for a_val, a_idx, p_val, p_idx in zip(anchor_val, anchor_idx, positive_val, positive_idx):
-        #     p_intersect = p_idx.unique()
-        #     cat = torch.cat((a_idx,p_intersect))
-        #     cat_idx, cnts = cat.unique(return_counts=True)
-        #     anchor_intersect = cat_idx[cnts!=1]
+        #anc_pos_weight , anc_neg_weight, pos_weight, neg_weight = abs_diff[0],abs_diff[1],abs_diff[2],abs_diff[3]
+        #anc_pos_weight_c, anc_neg_weight_c, pos_weight_c, neg_weight_c = abs_common[0],abs_common[1],abs_common[2],abs_common[3]
         
-        # weight_param = torch.zeros((B*ID,N), dtype=cls_similarity_b.dtype, requires_grad=True).cuda()
-        # idx = idx.reshape(-1,idx.shape[-1])
-        # weight = weight_param.scatter_add_(1,idx,cls_similarity_b)
-        # weight_sum = weight.reshape(B,-1,N).sum(dim=1)
-        # # val_reshape = val.reshape(B,-1)
-        # idx_reshape = idx.reshape(B,-1)
-
-        # CONCAT with CLS token
-        # out = torch.cat((cls_feat,out),dim=1)
-
-        # dist_mat = euclidean_dist(out,out)
-        # dist_ap, dist_an = hard_example_mining(dist_mat, labels) # hard batch mining
-        # dist_ap *= (1.0 + self.hard_factor)
-        # dist_an *= (1.0 - self.hard_factor)
-
+        dist_pos = torch.sum(
+            (cls_feat * anc_weight - pos_cls * anc_weight).pow(2), dim=1
+        ).sqrt()
+        
+        dist_neg = torch.sum(
+            (cls_feat * anc_weight - neg_cls * anc_weight).pow(2), dim=1
+        ).sqrt() # * : element wise multiplication
+        
         dist_ap_cls *= (1.0 + self.hard_factor)
         dist_an_cls *= (1.0 + self.hard_factor)
 
@@ -664,12 +765,12 @@ class TripletAttentionLoss_ss_pos_2(object):
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             #loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
             #loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
-            loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
             loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
             #loss_dist = self.ranking_loss(dist_position_neg - dist_position_pos,y)
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
-            loss = loss_cls_mean + loss_cls_weighted + JSD_loss
+            loss = loss_cls_weighted + JSD_loss
             
             if torch.isnan(loss) or torch.isinf(loss) :
                 wandb.finish()
@@ -906,7 +1007,6 @@ class TripletAttentionLoss_ss_pos_1(object):
         B,N,C = patch_feat_A.shape
         ID = self.num_instance
         scale = cls_feat.shape[-1] ** 0.5
-
         
         # Method 5
         pos_cls = cls_feat[ind_pos_cls]
@@ -1010,121 +1110,7 @@ class TripletAttentionLoss_ss_pos_1(object):
                 wandb.finish()
 
         return loss, p_ratio, dist_ap_cls, dist_an_cls
-    # Triplet_loss = (
-    #     self.ranking_loss(dist_an.detach() - dist_ap, y)
-    #     + self.ranking_loss(dist_neg - dist_pos, y)
-    #     + self.ranking_loss(dist_an_mean, dist_ap.detach(), y)
-    # )
 
-    # def weight(
-    #     self, ind_neg: torch.Tensor, global_feat : torch.Tensor
-    # ) -> torch.Tensor: # target = labels
-    # Cross Attention loss
-
-    # (
-    #     dist_ap,
-    #     dist_an,
-    #     dist_an_mean,
-    #     ind_pos,
-    #     ind_neg,
-    # ) = hard_example_mining_with_inds(dist_mat, labels)
-
-    # patch_feat_P = patch_feat_A[ind_pos]
-    # patch_feat_N = patch_feat_A[ind_neg]
-
-    # AP_similarity = patch_feat_A @ patch_feat_P.transpose(-2,-1)
-    # AN_similarity = patch_feat_A @ patch_feat_N.transpose(-2,-1)
-    
-    # AP_value, AP_index = torch.max(AP_similarity,-1)
-    # AN_value, AN_index = torch.max(AN_similarity,-1)
-
-    # AP_index = AP_index.unsqueeze(-1).expand(B,N,C)
-    # AP_patch = torch.gather(patch_feat_P,1,AP_index) # Anchor의 patch와 가장 가까운 Positive patch
-    
-    # AN_index = AN_index.unsqueeze(-1).expand(B,N,C)
-    # AN_patch = torch.gather(patch_feat_N,1,AN_index) # Anchor의 patch와 가장 가까운 Negative patch
-    
-    # #AP_dist = torch.norm(patch_feat_A - AP_patch,p=2,dim=2)
-    # AP_dist = torch.cdist(patch_feat_A,AP_patch).diagonal(dim1=-2,dim2=-1)
-    # AP_dist = torch.sum(AP_dist,dim=1)
-    # #weighted_AP_dist = torch.sum(cls_similarity * AP_dist,dim=1)
-
-    # #AN_dist = torch.norm(patch_feat_A - AN_patch,p=2,dim=2)
-    # AN_dist = torch.cdist(patch_feat_A,AN_patch).diagonal(dim1=-2,dim2=-1)
-    # AN_dist = torch.sum(AN_dist,dim=1)
-    # #weighted_AN_dist = torch.sum(cls_similarity * AN_dist,dim=1)
-
-    # # neg_weight --> BoT : [64,2048] , ViT : [64, 768]
-    # # global_feat --> [64,2048] 
-    # # Euclidean distance between Weighted feature of Anchor & negative, positive
-    
-    # #=================================================================================
-
-    # # y = weighted_AN_dist.new().resize_as_(weighted_AN_dist).fill_(1) # y.shape = 64
-
-    # # if self.margin is not None:
-    # #     loss_ss = self.ranking_loss(weighted_AN_dist, weighted_AP_dist, y)
-    # #     loss_cls = self.ranking_loss(dist_an, dist_ap,y)
-    # #     Triplet_loss = loss_ss + loss_cls
-    # # else:
-    # #     loss_ss = self.ranking_loss(weighted_AN_dist - weighted_AP_dist, y)
-    # #     loss_cls = self.ranking_loss(dist_an, dist_ap,y)
-    # #     Triplet_loss = loss_ss + loss_cls
-    # # return Triplet_loss, weighted_AN_dist, weighted_AP_dist
-    # #=================================================================================
-    # y = AN_dist.new().resize_as_(AN_dist).fill_(1) # y.shape = 64
-
-    # if self.margin is not None:
-    #     loss_ss = self.ranking_loss(AN_dist, AP_dist, y)
-    #     #loss_cls = self.ranking_loss(dist_an, dist_ap,y)
-    #     Triplet_loss = loss_ss 
-    # else:
-    #     loss_ss = self.ranking_loss(AN_dist - AP_dist, y)
-    #     #loss_cls = self.ranking_loss(dist_an, dist_ap,y)
-    #     Triplet_loss = loss_ss
-    # return Triplet_loss, AN_dist, AP_dist
-    # def weight(
-    #     self, ind_neg: torch.Tensor, global_feat : torch.Tensor
-    # ) -> torch.Tensor: # target = labels
-
-    #     # weight_neg1 = param[target] # 각 sample ID의 weight vector [64,768]
-    #     # weight_neg2 = param[target[ind_neg]] # 각 sample ID와 가장 먼 sample ID의 weight vector
-    #     # weight_neg = torch.abs(weight_neg1 - weight_neg2) # 둘의 차이, [64,2048]
-    #     # max, _ = torch.max(weight_neg, dim=1, keepdim=True) # max : [64,1] , weight_neg 각 행에서 가장 큰 값
-    #     # weight_neg = weight_neg / (max + 1e-12) # 큰값으로 normalize
-    #     # weight_neg[weight_neg < t] = -self.weight_param 
-    #     # weight_neg = weight_neg + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-        
-    #     weight_neg_patch1 = global_feat # 각 sample ID의 patch feature 
-    #     weight_neg_patch2 = global_feat[ind_neg] # 각 sample ID와 가장 먼 sample ID의 patch 
-        
-    #     # cos_distance_weight
-
-    #     dot= torch.sum(weight_neg_patch1 * weight_neg_patch2,dim=-1)
-    #     weight_neg_patch1_norm = torch.norm(weight_neg_patch1, p=2, dim=-1)
-    #     weight_neg_patch2_norm = torch.norm(weight_neg_patch2, p=2, dim=-1)
-    #     cos = dot/(weight_neg_patch1_norm * weight_neg_patch2_norm)
-    #     acos = torch.acos(cos)
-    #     acos_max, _ = torch.max(acos,dim=1,keepdim=True)
-    #     acos_norm = acos / (acos_max + 1e-12)
-    #     neg_weight = acos_norm.unsqueeze(-1)
-        
-    #     # Need to fix
-
-    #     # Euclidean_distance_weight
-    #     dist = torch.norm(torch.abs(weight_neg_patch1 - weight_neg_patch2),p=2,dim=-1)
-    #     max, _ = torch.max(dist, dim = 1 ,keepdim = True)
-    #     dist  = dist / (max + 1e-12)
-    #     _, idx = dist.sort(dim=1)
-    #     dist[idx<idx.shape[1]*0.5] = -self.weight_param
-    #     dist = dist + self.weight_param
-    #     # dist = dist - self.weight_param
-    #     neg_weight = dist.unsqueeze(-1)
-    #     # For numerical stability
-    #     # 나중에 해보기
-    #     # acos_norm[acos_norm<t] = -self.weight_param
-    #     # acos_norm = acos_norm + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-    #     return neg_weight
 class TripletAttentionLoss_ss_1(object):
     """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
@@ -1296,7 +1282,7 @@ class TripletAttentionLoss_ss_2(object):
         ID = self.num_instance
         scale = cls_feat.shape[-1] ** 0.5
 
-        anc_sim = (((anc_param.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))).softmax(-1) 
+        anc_sim = (((anc_param.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1) 
         anc_patch_norm = torch.norm(torch.sum(anc_sim.unsqueeze(-1)*patch_feat_A,dim=1),p=2,dim=1)
         cls_feat_norm = torch.norm(cls_feat,p=2,dim=1)
         
@@ -1340,13 +1326,13 @@ class TripletAttentionLoss_ss_2(object):
             #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
             #loss =  loss_cls_weighted_common + loss_cls_weighted + loss_cls
         else:
-            loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
+            #loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
             #loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
-            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
+            loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
             loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
-            loss = loss_cls_weighted + loss_cls
+            loss = loss_cls_weighted + loss_cls_mean
         if torch.isnan(loss) or torch.isinf(loss) :
             wandb.finish()
         # elif epoch == 41 :
