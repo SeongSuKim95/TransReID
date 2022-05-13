@@ -92,7 +92,7 @@ def do_train(cfg,
                         rel_pos_bias = bias_table.gather(1,bias_index_dummy).reshape(-1,patch_num,patch_num)
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
-                    if triplet_type == 'triplet_ss_pos_4':
+                    if triplet_type in ['triplet_ss_pos_4','triplet_ss_pos_6']:
                         loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
                     else :
                         loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
