@@ -1,3 +1,4 @@
+from re import A
 import torch
 from torch import nn
 from typing import Optional, Tuple
@@ -781,7 +782,7 @@ class TripletAttentionLoss_ss_pos_6(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, comb, comb_idx, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
@@ -791,6 +792,8 @@ class TripletAttentionLoss_ss_pos_6(object):
         self.max_epoch = max_epoch
         self.rel_pos = rel_pos
         self.JSD_loss = JSD()
+        self.comb = comb 
+        self.comb_idx = comb_idx
         self.weight_param = nn.Parameter(
             torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
         )
@@ -864,10 +867,12 @@ class TripletAttentionLoss_ss_pos_6(object):
         val_pos, ind_pos = torch.topk(pos_sim,rank,dim=-1)
         
         param_sim= (((param.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1) 
-        val_anc_param,ind_anc_param = torch.topk(param_sim,5,dim=-1)
-        ind_anc_5 = ind_anc_param[:,:10]
+        val_anc_param,ind_anc_param = torch.topk(param_sim,self.comb_idx,dim=-1)
+        if self.comb :
+            anc_comb = [torch.combinations(x,r=2) for x in ind_anc_param]
+        else :
+            anc_comb = [torch.cartesian_prod(x,x) for x in ind_anc_param]
 
-        anc_comb = [torch.combinations(x,r=2) for x in ind_anc_5]
         anc_comb = torch.cat(anc_comb,0).reshape(B,-1,2)
         anc_vec = []
         for i in range(B):
@@ -968,6 +973,138 @@ class TripletAttentionLoss_ss_pos_6(object):
         # dist_an = torch.gather(dist_mat,1,ind_neg_cls.unsqueeze(-1))
         # dist_ap = dist_ap.squeeze(1)
         # dist_an = dist_an.squeeze(1)
+
+        y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
+        if self.margin is not None:
+            loss_cls = self.ranking_loss(dist_an_cls, dist_ap_cls, y)
+            loss_cls_weighted = self.ranking_loss(dist_neg, dist_pos,y)
+            #loss_cls_weighted_common = self.ranking_loss(dist_neg_common,dist_pos_common,y)
+            #loss_cls_mean = self.ranking_loss(dist_an_mean_cls, dist_ap_cls,y)
+            # loss_gap = self.ranking_loss(dist_an, dist_ap, y)
+            # loss = loss_cls + 0.2 * loss_gap
+            #loss =  loss_cls_weighted_common + loss_cls_weighted + loss_cls
+        else:
+            #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
+            #loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
+            #loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
+            loss_cls_mean = self.ranking_loss(dist_an_mean_cls - dist_ap_cls.detach(),y)
+            loss_cls_weighted = self.ranking_loss(dist_neg - dist_pos,y)
+            #loss_dist = self.ranking_loss(dist_position_neg - dist_position_pos,y)
+            #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
+            #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
+            loss = loss_cls_mean + loss_cls_weighted + JSD_loss
+            
+            if torch.isnan(loss) or torch.isinf(loss) :
+                wandb.finish()
+
+        return loss, p_ratio, dist_ap_cls, dist_an_cls
+
+class TripletAttentionLoss_ss_pos_7(object):
+    """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
+    Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
+    Loss for Person Re-Identification'."""
+
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, comb, comb_idx,margin: Optional[float] = None, hard_factor=0.0):
+        self.margin = margin
+        self.attn_loss = nn.MSELoss()
+        self.hard_factor = hard_factor
+        self.patch_ratio = patch_ratio
+        self.loss_ratio = loss_ratio
+        self.num_instance = num_instance
+        self.max_epoch = max_epoch
+        self.rel_pos = rel_pos
+        self.comb = comb
+        self.comb_idx = comb_idx
+        self.JSD_loss = JSD()
+        self.weight_param = nn.Parameter(
+            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
+        )
+        if margin is not None:
+            self.ranking_loss = nn.MarginRankingLoss(margin=margin)
+        else:
+            self.ranking_loss = nn.SoftMarginLoss()
+
+    def __call__(
+        self,
+        global_feat: torch.Tensor,
+        labels: torch.Tensor,
+        epoch,
+        rel_pos_bias,
+        abs_pos,
+        cls_param,
+        normalize_feature: bool = False,
+    ) -> Tuple[torch.Tensor]:
+        #global_feat = global_feat.contiguous()
+        t = 0
+        # if epoch >= self.max_epoch * 0.5 :
+        #     patch_ratio = self.patch_ratio * 0.5
+        # else :
+        #     patch_ratio = self.patch_ratio
+        cls_feat = global_feat[:,0] # detach()
+        # cls_feat_detach = global_feat[:,0].detach()
+        dist_mat_cls = euclidean_dist(cls_feat,cls_feat)
+
+        (
+            dist_ap_cls,
+            dist_an_cls,
+            dist_an_mean_cls,
+            ind_pos_cls,
+            ind_neg_cls,
+        ) = hard_example_mining_with_inds(dist_mat_cls, labels)
+
+        patch_feat_A = global_feat[:,1:]
+        B,N,C = patch_feat_A.shape
+        ID = self.num_instance
+        scale = cls_feat.shape[-1] ** 0.5
+        param = cls_param[labels]
+
+        anc_sim = (((param.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1)  
+        anc_patch_norm = torch.norm(torch.sum(anc_sim.unsqueeze(-1)*patch_feat_A,dim=1),p=2,dim=1)
+        cls_feat_norm = torch.norm(cls_feat,p=2,dim=1)
+        anc_ratio = (cls_feat_norm / anc_patch_norm).unsqueeze(-1)
+        
+        p_ratio = self.patch_ratio[0]
+        rank = int(N*p_ratio)
+        val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
+        
+        dummy_idx = ind_anc.unsqueeze(2).expand(ind_anc.size(0),ind_anc.size(1),patch_feat_A.size(2))
+        rank_patch  = patch_feat_A.gather(1,dummy_idx)
+        anc_main_patches = torch.sum(val_anc.unsqueeze(-1) * rank_patch,dim=1) 
+
+        diff_cls = (cls_feat - anc_main_patches * anc_ratio)
+
+        ind_anc_pos = ind_anc[:,:self.comb_idx]
+
+        if self.comb :
+            anc_comb = [torch.combinations(x,r=2) for x in ind_anc_pos]
+        else : 
+            anc_comb = [torch.cartesian_prod(x,x) for x in ind_anc_pos]
+        anc_comb = torch.cat(anc_comb,0).reshape(B,-1,2)
+        anc_vec = []
+        for i in range(B):
+            if self.rel_pos :
+                rel_val_anc = torch.stack([rel_pos_bias[:,x[0],x[1]] for x in anc_comb[i]])
+                abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
+                abs_val_anc = abs_val_anc.unsqueeze(1).expand(rel_val_anc.size(0),rel_val_anc.size(1))
+                anc_vec.append(rel_val_anc+abs_val_anc)
+            else :
+                abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
+                anc_vec.append(abs_val_anc)
+        anc_vec = (torch.cat(anc_vec).reshape(B,anc_comb.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1)
+        pos_vec = anc_vec[ind_pos_cls]
+
+        JSD_loss = self.JSD_loss(anc_vec,pos_vec)
+
+        dist_pos = torch.sum(
+            (diff_cls - diff_cls[ind_pos_cls]).pow(2), dim=1
+        ).sqrt()
+        
+        dist_neg = torch.sum(
+            (diff_cls - diff_cls[ind_neg_cls]).pow(2), dim=1
+        ).sqrt() # * : element wise multiplication
+        
+        dist_ap_cls *= (1.0 + self.hard_factor)
+        dist_an_cls *= (1.0 + self.hard_factor)
 
         y = dist_an_cls.new().resize_as_(dist_an_cls).fill_(1)
         if self.margin is not None:

@@ -1,30 +1,30 @@
-MODEL:
-  PRETRAIN_CHOICE: 'imagenet'
-  PRETRAIN_HW_RATIO: 2
-  PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
-  
   # triplet_ss_1 : loss_abs(CLS) version
   # triplet_ss_2 : loss_abs(cls_param) 0509
-
   # triplet_ss_pos_1 : loss_cls_mean + loss_abs(CLS) + loss_dist
   # triplet_ss_pos_2 : loss_cls_mean + loss_abs(CLS) + JSD
   # triplet_ss_pos_3 : triplet + JSD(CLS)
   # triplet_ss_pos_4 : triplet + JSD(cls_param)
   # triplet_ss_pos_5 : loss_abs(CLS) or triplet + JSD(head_wise)
   # triplet_ss_pos_6 : loss_abs or triplet + JSD(head_wise, cls_weight)
+  # triplet_ss_pos_7 : loss(cls_weight) + JSD(head_wise, cls_weight)
+MODEL:
+  PRETRAIN_CHOICE: 'imagenet'
+  PRETRAIN_HW_RATIO: 2
+  PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_7'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
   REL_POS : True
   ABS_POS : True
+
 INPUT:
   SIZE_TRAIN: [384, 128]
   SIZE_TEST: [384, 128]
@@ -46,8 +46,8 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 120
-  BASE_LR: 0.0006
+  MAX_EPOCHS: 180
+  BASE_LR: 0.0002
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -60,6 +60,8 @@ SOLVER:
   PATCH_RATIO : [0.5,0.5]
   LOSS_RATIO : 0.5
   FEAT_NORM : False
+  COMB : True
+  COMB_INDEX : 5
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -78,5 +80,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 350
+INDEX : 355
 WANDB : True

@@ -39,17 +39,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # args.opts.append("SOLVER.BASE_LR")
     # args.opts.append(args.BASE_LR)
-    
     if args.config_file != "":
         cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
 
     set_seed(cfg.SOLVER.SEED)
-    if cfg.WANDB : 
-        wandb.init(project="TransReID", entity="panda0728",config=cfg)
-        #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
-        cfg_wb = wandb.config
     
     if cfg.MODEL.DIST_TRAIN:
         torch.cuda.set_device(args.local_rank)

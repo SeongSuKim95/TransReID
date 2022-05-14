@@ -23,7 +23,10 @@ def do_train(cfg,
              scheduler,
              loss_fn,
              num_query, local_rank):
-
+    if cfg.WANDB : 
+        wandb.init(project="TransReID", entity="panda0728",config=cfg)
+        #wandb.watch(model,loss_fn, log = "all", log_freq = 1)
+        cfg_wb = wandb.config
     log_period = cfg.SOLVER.LOG_PERIOD
     checkpoint_period = cfg.SOLVER.CHECKPOINT_PERIOD
     eval_period = cfg.SOLVER.EVAL_PERIOD
@@ -92,7 +95,7 @@ def do_train(cfg,
                         rel_pos_bias = bias_table.gather(1,bias_index_dummy).reshape(-1,patch_num,patch_num)
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
-                    if triplet_type in ['triplet_ss_pos_4','triplet_ss_pos_6']:
+                    if triplet_type in ['triplet_ss_pos_4','triplet_ss_pos_6','triplet_ss_pos_7','triplet_ss_pos_8']:
                         loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
                     else :
                         loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)

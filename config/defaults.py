@@ -174,7 +174,8 @@ _C.SOLVER.EVAL_PERIOD = 10
 _C.SOLVER.IMS_PER_BATCH = 64
 # Use L2 normalized feature in Triplet loss
 _C.SOLVER.FEAT_NORM = False
-
+_C.SOLVER.COMB = False
+_C.SOLVER.COMB_INDEX = 5
 # ---------------------------------------------------------------------------- #
 # TEST
 # ---------------------------------------------------------------------------- #

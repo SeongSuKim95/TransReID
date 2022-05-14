@@ -6,7 +6,7 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import  TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2, TripletAttentionLoss_ss_pos_1, TripletAttentionLoss_ss_pos_2,TripletAttentionLoss_ss_pos_3, TripletAttentionLoss_ss_pos_4,TripletAttentionLoss_ss_pos_5,TripletAttentionLoss_ss_pos_6
+from .triplet_loss import  TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2, TripletAttentionLoss_ss_pos_1, TripletAttentionLoss_ss_pos_2,TripletAttentionLoss_ss_pos_3, TripletAttentionLoss_ss_pos_4,TripletAttentionLoss_ss_pos_5,TripletAttentionLoss_ss_pos_6,TripletAttentionLoss_ss_pos_7
 from .center_loss import CenterLoss
 import torch
 from typing import Tuple
@@ -21,6 +21,8 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     max_epoch = cfg.SOLVER.MAX_EPOCHS
     feat_norm = cfg.SOLVER.FEAT_NORM
     rel_pos = cfg.MODEL.REL_POS
+    comb = cfg.SOLVER.COMB
+    comb_idx = cfg.SOLVER.COMB_INDEX
     feat_dim = 2048
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True) 
     # center loss는 parameter가 존재, nn.Module을 상속받는 class
@@ -84,12 +86,19 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                 print("using soft triplet_ss_pos_5 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
         elif loss_type == "triplet_ss_pos_6":
             if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
+                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx)
                 print("using soft triplet_ss_pos_6 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
             else:
-                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
+                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using soft triplet_ss_pos_6 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
-        
+        elif loss_type == "triplet_ss_pos_7":
+            if cfg.MODEL.NO_MARGIN:
+                triplet = TripletAttentionLoss_ss_pos_7(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx)
+                print("using soft triplet_ss_pos_7 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
+            else:
+                triplet = TripletAttentionLoss_ss_pos_7(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,cfg.SOLVER.MARGIN)  # triplet loss
+                print("using soft triplet_ss_pos_7 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
+ 
         else:
             print('expected METRIC_LOSS_TYPE should be triplet/triplet_ss/triplet_ss_1/triplet_ss_2''but got {}'.format(loss_type))
         
@@ -213,7 +222,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                          TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, rel_pos_bias, abs_pos)[0] , triplet(feat, target, epoch, rel_pos_bias, abs_pos)[1]
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
-        elif loss_type in ['triplet_ss_pos_4','triplet_ss_pos_6']:
+        elif loss_type in ['triplet_ss_pos_4','triplet_ss_pos_6','triplet_ss_pos_7','triplet_ss_pos_8']:
             #def loss_func(score, feat,target,target_cam,epoch,cls_param,pos_param):
             def loss_func(score, feat,target,target_cam,epoch,rel_pos_bias,abs_pos,cls_param):
                 if cfg.MODEL.IF_LABELSMOOTH == 'on':
