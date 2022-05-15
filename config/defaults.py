@@ -176,6 +176,8 @@ _C.SOLVER.IMS_PER_BATCH = 64
 _C.SOLVER.FEAT_NORM = False
 _C.SOLVER.COMB = False
 _C.SOLVER.COMB_INDEX = 5
+_C.SOLVER.JSD = False
+_C.SOLVER.HEAD_WISE = False
 # ---------------------------------------------------------------------------- #
 # TEST
 # ---------------------------------------------------------------------------- #

@@ -46,8 +46,8 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 180
-  BASE_LR: 0.0002
+  MAX_EPOCHS: 120
+  BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
@@ -60,7 +60,9 @@ SOLVER:
   PATCH_RATIO : [0.5,0.5]
   LOSS_RATIO : 0.5
   FEAT_NORM : False
-  COMB : True
+  JSD : True
+  HEAD_WISE : False
+  COMB : False
   COMB_INDEX : 5
 TEST:
   EVAL: False
@@ -80,5 +82,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 355
+INDEX : 359
 WANDB : True
