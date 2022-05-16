@@ -11,7 +11,7 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_7'
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -34,11 +34,10 @@ INPUT:
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
-  NAMES: ('market1501')
+  NAMES: ('dukemtmc')
   ROOT_DIR: ('/mnt/hdd_data/Dataset')
 
 DATALOADER:
-
   SAMPLER: 'softmax_triplet'
   NUM_INSTANCE: 4 # Number of samples for each ID
   NUM_WORKERS: 8
@@ -81,6 +80,6 @@ TEST:
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
-OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 359
+OUTPUT_DIR: './logs/dukemtmc_vit_transreid_384'
+INDEX : 400
 WANDB : True

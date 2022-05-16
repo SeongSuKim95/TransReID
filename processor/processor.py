@@ -101,7 +101,7 @@ def do_train(cfg,
                         loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
                
                 else : 
-                    loss = loss_fn(score,feat,target)
+                    loss = loss_fn(score,feat,target,target_cam)
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)

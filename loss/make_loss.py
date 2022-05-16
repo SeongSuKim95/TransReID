@@ -25,12 +25,13 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
     comb_idx = cfg.SOLVER.COMB_INDEX
     jsd = cfg.SOLVER.JSD
     head_wise = cfg.SOLVER.HEAD_WISE
+    head_num = cfg.MODEL.HEAD_NUM
     feat_dim = 2048
     center_criterion = CenterLoss(num_classes=num_classes, feat_dim=feat_dim, use_gpu=True) 
     # center loss는 parameter가 존재, nn.Module을 상속받는 class
     # center loss는 classifier단의 weight로 loss를 구하는 것이 아니라, 자체적인 parameter를 optimize하기 때문에 criterion을 따로 구성해야함   
     if "triplet" in sampler :
-        if loss_type in "triplet":
+        if loss_type == "triplet":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletLoss(feat_norm) # __call__ return : loss, dist_ap, dist_an
                 print("using soft triplet loss for training")
@@ -88,10 +89,10 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                 print("using soft triplet_ss_pos_5 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
         elif loss_type == "triplet_ss_pos_6":
             if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,jsd,head_wise)
+                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,jsd,head_wise,head_num)
                 print("using soft triplet_ss_pos_6 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
             else:
-                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,jsd,head_wise,cfg.SOLVER.MARGIN)  # triplet loss
+                triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,jsd,head_wise,head_num,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using soft triplet_ss_pos_6 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
         elif loss_type == "triplet_ss_pos_7":
             if cfg.MODEL.NO_MARGIN:
