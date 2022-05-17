@@ -18,7 +18,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
@@ -62,7 +62,7 @@ SOLVER:
   FEAT_NORM : False
   JSD : True
   HEAD_WISE : False
-  COMB : False
+  COMB : True
   COMB_INDEX : 5
 TEST:
   EVAL: False
@@ -82,5 +82,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_256_128'
-INDEX : 366
+INDEX : 367
 WANDB : True
