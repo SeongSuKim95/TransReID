@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import torch.nn.functional as F
 import sys
 import wandb
-from .JSD_loss import JSD, HeadWise_JSD
+from .JSD_loss import JSD, LayerWise_JSD
 def normalize_max(x, axis=-1):
     """Normalizing to unit length along the specified dimension.
     Args:
@@ -792,7 +792,7 @@ class TripletAttentionLoss_ss_pos_6(object):
         self.max_epoch = max_epoch
         self.rel_pos = rel_pos
         self.JSD_loss = JSD()
-        self.HW_JSD_loss = HeadWise_JSD()
+        self.LW_loss = LayerWise_JSD()
         self.comb = comb 
         self.comb_idx = comb_idx
         self.JSD = jsd
@@ -897,9 +897,9 @@ class TripletAttentionLoss_ss_pos_6(object):
         
         if self.comb :
             if self.HEAD_WISE:
-                anc_vec = anc_vec.reshape(B,-1,self.comb_idx * (self.comb_idx -1))
+                anc_vec = anc_vec.reshape(B,-1,int((self.comb_idx * (self.comb_idx -1))/2))
             else :
-                anc_vec = anc_vec.reshape(B,-1,self.HEAD_NUM * self.comb_idx * (self.comb_idx-1))
+                anc_vec = anc_vec.reshape(B,-1,int((self.HEAD_NUM * self.comb_idx * (self.comb_idx-1))/2))
         else :
             if self.HEAD_WISE:
                 anc_vec = anc_vec.reshape(B,-1,self.comb_idx * self.comb_idx)
@@ -1008,7 +1008,10 @@ class TripletAttentionLoss_ss_pos_6(object):
             #loss =  loss_cls_weighted_common + loss_cls_weighted + loss_cls
         else:
             if self.JSD : 
-                position_loss = self.JSD_loss(anc_vec,pos_vec)
+                if self.HEAD_WISE : 
+                    position_loss = self.JSD_loss(anc_vec,pos_vec)
+                else :
+                    position_loss = self.LW_loss(anc_vec,pos_vec)
             else :
                 position_loss = self.KLD_loss(anc_vec.log(),pos_vec.log())
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
