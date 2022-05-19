@@ -24,6 +24,12 @@ __pycache__
 # Icon must end with two \r
 Icon
 
+# Dataset
+Occluded_Duke
+market1501
+MSMT17_V2
+dukemtmcreid
+cuhk03-np
 
 # Thumbnails
 ._*

@@ -114,7 +114,7 @@ def make_dataloader(cfg):
     else:
         print('unsupported sampler! expected softmax or triplet but got {}'.format(cfg.SAMPLER))
 
-    query_set = ImageDataset(dataset.query,val_transforms)
+    query_set = ImageDataset(dataset.query, val_transforms)
     gallery_set = ImageDataset(dataset.gallery, val_transforms)
 
     val_set = ImageDataset(dataset.query + dataset.gallery, val_transforms)

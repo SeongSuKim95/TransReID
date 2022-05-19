@@ -6,7 +6,7 @@
 
 import torch.nn.functional as F
 from .softmax_loss import CrossEntropyLabelSmooth, LabelSmoothingCrossEntropy
-from .triplet_loss import  TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2, TripletAttentionLoss_ss_pos_1, TripletAttentionLoss_ss_pos_2,TripletAttentionLoss_ss_pos_3, TripletAttentionLoss_ss_pos_4,TripletAttentionLoss_ss_pos_5,TripletAttentionLoss_ss_pos_6,TripletAttentionLoss_ss_pos_7
+from .triplet_loss import  TripletLoss, TripletAttentionLoss_ss_1, TripletAttentionLoss_ss_2, TripletAttentionLoss_ss_pos_1, TripletAttentionLoss_ss_pos_5,TripletAttentionLoss_ss_pos_6
 from .center_loss import CenterLoss
 import torch
 from typing import Tuple
@@ -59,27 +59,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                 triplet = TripletAttentionLoss_ss_pos_1(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using soft triplet_pos_1 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))        
-        elif loss_type == "triplet_ss_pos_2":
-            if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_2(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
-                print("using soft triplet_ss_pos_2 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
-            else:
-                triplet = TripletAttentionLoss_ss_pos_2(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet_ss_pos_2 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))                
-        elif loss_type == "triplet_ss_pos_3":
-            if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_3(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
-                print("using soft triplet_ss_pos_3 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
-            else:
-                triplet = TripletAttentionLoss_ss_pos_3(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet_ss_pos_3 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))         
-        elif loss_type == "triplet_ss_pos_4":
-            if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_4(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
-                print("using soft triplet_ss_pos_4 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
-            else:
-                triplet = TripletAttentionLoss_ss_pos_4(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet_ss_pos_4 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN))                       
+       
         elif loss_type == "triplet_ss_pos_5":
             if cfg.MODEL.NO_MARGIN:
                 triplet = TripletAttentionLoss_ss_pos_5(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos)
@@ -94,14 +74,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
             else:
                 triplet = TripletAttentionLoss_ss_pos_6(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,jsd,head_wise,head_num,cfg.SOLVER.MARGIN)  # triplet loss
                 print("using soft triplet_ss_pos_6 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
-        elif loss_type == "triplet_ss_pos_7":
-            if cfg.MODEL.NO_MARGIN:
-                triplet = TripletAttentionLoss_ss_pos_7(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx)
-                print("using soft triplet_ss_pos_7 attention loss for training with loss ratio : {} ,patch ratio : {}".format(loss_ratio,patch_ratio))
-            else:
-                triplet = TripletAttentionLoss_ss_pos_7(loss_ratio,patch_ratio,num_instance,max_epoch,rel_pos,comb,comb_idx,cfg.SOLVER.MARGIN)  # triplet loss
-                print("using soft triplet_ss_pos_7 attention loss with loss_ratio : {}, patch ratio : {}, margin:{}".format(loss_ratio,patch_ratio,cfg.SOLVER.MARGIN)) 
- 
+
         else:
             print('expected METRIC_LOSS_TYPE should be triplet/triplet_ss/triplet_ss_1/triplet_ss_2''but got {}'.format(loss_type))
         

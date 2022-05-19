@@ -24,6 +24,7 @@ MODEL:
   STEM_CONV: True
   REL_POS : True
   ABS_POS : True
+  HEAD_NUM : 12
 
 INPUT:
   SIZE_TRAIN: [384, 128]
@@ -35,7 +36,7 @@ INPUT:
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
   NAMES: ('dukemtmc')
-  ROOT_DIR: ('/mnt/hdd_data/Dataset')
+  ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
 
 DATALOADER:
   SAMPLER: 'softmax_triplet'
@@ -45,7 +46,7 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 120
+  MAX_EPOCHS: 180
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
@@ -61,7 +62,7 @@ SOLVER:
   FEAT_NORM : False
   JSD : True
   HEAD_WISE : False
-  COMB : False
+  COMB : True
   COMB_INDEX : 5
 TEST:
   EVAL: False
@@ -80,6 +81,6 @@ TEST:
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
-OUTPUT_DIR: './logs/dukemtmc_vit_transreid_384'
-INDEX : 400
+OUTPUT_DIR: './logs/DMTMC_vit_base_384_128'
+INDEX : 703
 WANDB : True
