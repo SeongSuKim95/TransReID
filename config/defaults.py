@@ -179,6 +179,7 @@ _C.SOLVER.COMB = False
 _C.SOLVER.COMB_INDEX = 5
 _C.SOLVER.JSD = False
 _C.SOLVER.HEAD_WISE = False
+_C.SOLVER.REPLACEMENT = False
 # ---------------------------------------------------------------------------- #
 # TEST
 # ---------------------------------------------------------------------------- #

@@ -63,7 +63,8 @@ SOLVER:
   JSD : True
   HEAD_WISE : True
   COMB : True
-  COMB_INDEX : 5
+  REPLACEMENT : True
+  COMB_INDEX : 10
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -82,5 +83,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 370
+INDEX : 381
 WANDB : True

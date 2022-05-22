@@ -12,7 +12,7 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -23,7 +23,7 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : False
+  REL_POS : True
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -48,7 +48,7 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 180
+  MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
@@ -63,8 +63,8 @@ SOLVER:
   LOSS_RATIO : 0.5
   FEAT_NORM : False
   JSD : True
-  HEAD_WISE : True
-  COMB : False
+  HEAD_WISE : False
+  COMB : True
   COMB_INDEX : 5
 
 TEST:
@@ -85,5 +85,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/Occ_vit_base_384_128'
-INDEX : 501
+INDEX : 504
 WANDB : True
