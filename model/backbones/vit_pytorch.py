@@ -185,7 +185,7 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
         return x
 
-class Attention_relative(nn.Module):
+class Attention_relative_CLS(nn.Module):
     def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
@@ -195,8 +195,8 @@ class Attention_relative(nn.Module):
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.patch_size = patch_size
         # self.max_relative_position = 2
-
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads))
+        self.patch_num = patch_size[0] * patch_size[1]
+        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1) + 2 * self.patch_num,num_heads))
         
         coords_h = torch.arange(patch_size[1])
         coords_w = torch.arange(patch_size[0])
@@ -208,6 +208,13 @@ class Attention_relative(nn.Module):
         relative_coords[:, :, 1] += patch_size[0] - 1
         relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
+        max_idx = relative_position_index.max() + 1
+        rel_CLS_row = torch.arange(max_idx, max_idx + self.patch_num)
+        rel_CLS_col = torch.arange(rel_CLS_row.max()+1, rel_CLS_row.max()+1+self.patch_num)
+        rel_CLS_row = torch.cat((relative_position_index[0][0].unsqueeze(0),rel_CLS_row))
+
+        relative_position_index = torch.column_stack((rel_CLS_col,relative_position_index))
+        relative_position_index = torch.row_stack((rel_CLS_row,relative_position_index))
         self.register_buffer("relative_position_index", relative_position_index)
         
         self.attn_drop = nn.Dropout(attn_drop)
@@ -226,9 +233,9 @@ class Attention_relative(nn.Module):
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
+            self.patch_size[0] * self.patch_size[1] + 1, self.patch_size[0] * self.patch_size[1]+1, -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
+        attn[:,:,:,:] = attn[:,:,:,:] + relative_position_bias.unsqueeze(0)
         
         if mask is not None:
             nW = mask.shape[0]
@@ -244,7 +251,7 @@ class Attention_relative(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
-class Attention_relative_CLS(nn.Module):
+class Attention_relative(nn.Module):
     def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
         self.num_heads = num_heads
@@ -447,12 +454,16 @@ class ML_Block(nn.Module):
         
 class Block(nn.Module):
     # Cross_Attention Block
-    def __init__(self, dim, num_heads, rel_pos, patch_size , mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+    def __init__(self, dim, num_heads, rel_pos, rel_cls, patch_size , mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if rel_pos :
-            self.attn = Attention_relative(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            if rel_cls:
+                self.attn = Attention_relative_CLS(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            else:           
+                self.attn = Attention_relative(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        
         else : 
             self.attn = Attention(dim,num_heads=num_heads,qkv_bias=qkv_bias,qk_scale=qk_scale,attn_drop=attn_drop,proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -654,6 +665,7 @@ class TransReID_SSL(nn.Module):
         self.feat_cat = kwargs['feat_cat']
         self.abs_pos = kwargs['abs_pos']
         rel_pos = kwargs['rel_pos']
+        rel_cls = kwargs['rel_CLS']
 
         if self.abs_pos :
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
@@ -685,7 +697,7 @@ class TransReID_SSL(nn.Module):
 
         self.blocks = nn.ModuleList([
             Block(
-                dim=embed_dim, num_heads=num_heads, rel_pos = rel_pos, patch_size = patch_xy, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, rel_pos = rel_pos, rel_cls = rel_cls,patch_size = patch_xy, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
 

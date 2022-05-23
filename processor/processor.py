@@ -33,6 +33,7 @@ def do_train(cfg,
     triplet_type = cfg.MODEL.METRIC_LOSS_TYPE
     REL_POS = cfg.MODEL.REL_POS
     ABS_POS = cfg.MODEL.ABS_POS
+    REL_CLS = cfg.MODEL.REL_CLS
     num_layers = 12
     num_heads = 12
     device = "cuda"
