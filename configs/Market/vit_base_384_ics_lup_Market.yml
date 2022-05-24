@@ -24,6 +24,7 @@ MODEL:
   STEM_CONV: True
   REL_POS : True
   REL_CLS : False
+  REL_ABS : True
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -47,7 +48,7 @@ DATALOADER:
 SOLVER:
   OPTIMIZER_NAME: 'SGD'
   SCHEDULER_NAME: 'cos'
-  MAX_EPOCHS: 180
+  MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
   WARMUP_METHOD: 'linear'
@@ -64,7 +65,7 @@ SOLVER:
   JSD : True
   HEAD_WISE : False
   COMB : True
-  REPLACEMENT : False
+  REPLACEMENT : True
   COMB_INDEX : 5
 TEST:
   EVAL: False
@@ -84,5 +85,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 404
+INDEX : 411
 WANDB : True

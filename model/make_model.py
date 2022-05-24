@@ -183,6 +183,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                                                             feat_cat = cfg.MODEL.IF_FEAT_CAT,
                                                             rel_pos = cfg.MODEL.REL_POS,
                                                             rel_CLS = cfg.MODEL.REL_CLS,
+                                                            rel_abs = cfg.MODEL.REL_ABS,
                                                             abs_pos = cfg.MODEL.ABS_POS)
         else :
             self.base = factory[cfg.MODEL.TRANSFORMER_TYPE](img_size=cfg.INPUT.SIZE_TRAIN,
