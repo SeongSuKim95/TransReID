@@ -11,18 +11,18 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : False
+  REL_POS : True
   REL_CLS : False
   REL_ABS : False
   ABS_POS : True
@@ -37,7 +37,7 @@ INPUT:
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
-  NAMES: ('dukemtmc')
+  NAMES: ('cuhk03')
   ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
 
 DATALOADER:
@@ -84,6 +84,6 @@ TEST:
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
-OUTPUT_DIR: './logs/DMTMC_vit_base_384_128'
-INDEX : 705
+OUTPUT_DIR: './logs/cuhk03_vit_base_384_128'
+INDEX : 802
 WANDB : True

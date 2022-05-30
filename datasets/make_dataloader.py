@@ -13,7 +13,7 @@ import torch.distributed as dist
 from .occ_duke import OCC_DukeMTMCreID
 from .vehicleid import VehicleID
 from .veri import VeRi
-
+from .cuhk03np import Cuhk03np
 __factory = {
     'market1501': Market1501,
     'dukemtmc': DukeMTMCreID,
@@ -21,6 +21,7 @@ __factory = {
     'occ_duke': OCC_DukeMTMCreID,
     'veri': VeRi,
     'VehicleID': VehicleID,
+    'cuhk03': Cuhk03np,
 } # Class Factory
 
 def train_collate_fn(batch):

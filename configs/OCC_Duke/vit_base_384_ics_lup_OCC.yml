@@ -1,18 +1,17 @@
-# triplet_ss_1     : loss_abs(CLS) version
-# triplet_ss_2     : loss_abs(cls_param) 0509
-# triplet_ss_pos_1 : loss_cls_mean + loss_abs(CLS) + loss_dist
-# triplet_ss_pos_2 : loss_cls_mean + loss_abs(CLS) + JSD
-# triplet_ss_pos_3 : triplet + JSD(CLS)
-# triplet_ss_pos_4 : triplet + JSD(cls_param)
-# triplet_ss_pos_5 : loss_abs(CLS) or triplet + JSD(head_wise)
-# triplet_ss_pos_6 : loss_abs or triplet + JSD(head_wise, cls_weight)
-# triplet_ss_pos_7 : loss(cls_weight) + JSD(head_wise, cls_weight)
-
+  # triplet_ss_1 : loss_abs(CLS) version
+  # triplet_ss_2 : loss_abs(cls_param) 0509
+  # triplet_ss_pos_1 : loss_cls_mean + loss_abs(CLS) + loss_dist
+  # triplet_ss_pos_2 : loss_cls_mean + loss_abs(CLS) + JSD
+  # triplet_ss_pos_3 : triplet + JSD(CLS)
+  # triplet_ss_pos_4 : triplet + JSD(cls_param)
+  # triplet_ss_pos_5 : loss_abs(CLS) or triplet + JSD(head_wise)
+  # triplet_ss_pos_6 : loss_abs or triplet + JSD(head_wise, cls_weight)
+  # triplet_ss_pos_7 : loss(cls_weight) + JSD(head_wise, cls_weight)
 MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
+  METRIC_LOSS_TYPE: 'triplet'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -23,7 +22,9 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : True
+  REL_POS : False
+  REL_CLS : False
+  REL_ABS : False
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -35,7 +36,6 @@ INPUT:
   PADDING: 10
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
-
 DATASETS:
   NAMES: ('occ_duke')
   ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
@@ -65,8 +65,8 @@ SOLVER:
   JSD : True
   HEAD_WISE : False
   COMB : True
+  REPLACEMENT : True
   COMB_INDEX : 5
-
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -77,7 +77,7 @@ TEST:
   VISUALIZE : False
   VISUALIZE_INDEX : 777
   VISUALIZE_RANK : 10
-  VISUALIZE_TYPE : 0 # 0 : Specif384query index, 1: Max Error ID , 2: Max Distance Query 
+  VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
   HEAD_FUSION : 'mean'
   DISCARD_RATIO : 0.9
@@ -85,5 +85,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/Occ_vit_base_384_128'
-INDEX : 504
+INDEX : 506
 WANDB : True

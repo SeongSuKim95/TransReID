@@ -1,4 +1,5 @@
 from re import A
+from tkinter import X
 import torch
 from torch import nn
 from typing import Optional, Tuple
@@ -595,14 +596,14 @@ class TripletAttentionLoss_ss_pos_6(object):
         # #rank = int(N* self.patch_ratio)
         # #p_ratio = ((self.patch_ratio[1]-self.patch_ratio[0])/(self.max_epoch-1))*(epoch-1) + self.patch_ratio[0]
         p_ratio = self.patch_ratio[0]
-        # rank = int(N*p_ratio)
-        # val_anc, ind_anc = torch.topk(anc_sim,rank,dim=-1)
-        # val_pos, ind_pos = torch.topk(pos_sim,rank,dim=-1)
+        rank = int(N*p_ratio)
+        # val_anc, ind_anc = torch.topk(anc_sim + pos_sim,rank,dim=-1)
         ####################################################################################################
 
         param_sim= (((param.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1) 
         val_anc_param,ind_anc_param = torch.topk(param_sim,self.comb_idx,dim=-1)
-
+        
+        # ind_anc_param = ind_anc[:,:self.comb_idx]
         if self.comb :
             anc_comb = [torch.combinations(x,r=2,with_replacement=self.REPLACEMENT) for x in ind_anc_param]
         else :
@@ -612,7 +613,7 @@ class TripletAttentionLoss_ss_pos_6(object):
         anc_vec = []
         if self.rel_cls:
             rel_pos_bias_p = rel_pos_bias[:,1:,1:]
-            rel_pos_bias_c = rel_pos_bias[:,0,1:]
+            rel_pos_bias_c = rel_pos_bias[:,1:,0]
             abs_pos_p = abs_pos[1:]
             abs_pos_c = abs_pos[0]
             anc_vec_c = []
@@ -626,15 +627,14 @@ class TripletAttentionLoss_ss_pos_6(object):
                     abs_val_anc_p = abs_val_anc_p.unsqueeze(1).expand(rel_val_anc_p.size(0),rel_val_anc_p.size(1))
                     anc_vec.append(rel_val_anc_p + abs_val_anc_p)
 
-                    rel_val_anc_c = torch.stack([rel_pos_bias_c[:,x] for x in ind_anc_param[i]])
-                    abs_val_anc_c = torch.stack([abs_pos_c @ abs_pos_p[x] for x in ind_anc_param[i]])
-                    abs_val_anc_c = abs_val_anc_c.unsqueeze(1).expand(rel_val_anc_c.size(0),rel_val_anc_c.size(1))
-                    anc_vec_c.append(rel_val_anc_c + abs_val_anc_c)
+                    # rel_val_anc_c = torch.stack([rel_pos_bias_c[:,x] for x in ind_anc_param[i]])
+                    # anc_vec_c.append(rel_val_anc_c)
                 else : 
                     rel_val_anc = torch.stack([rel_pos_bias[:,x[0],x[1]] for x in anc_comb[i]])
-                    abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
-                    abs_val_anc = abs_val_anc.unsqueeze(1).expand(rel_val_anc.size(0),rel_val_anc.size(1))
-                    anc_vec.append(rel_val_anc+abs_val_anc)
+                    # abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
+                    # abs_val_anc = abs_val_anc.unsqueeze(1).expand(rel_val_anc.size(0),rel_val_anc.size(1))
+                    # anc_vec.append(rel_val_anc+abs_val_anc)
+                    anc_vec.append(rel_val_anc)
             else :
                 abs_val_anc = torch.stack([abs_pos[x[0]] @ abs_pos[x[1]] for x in anc_comb[i]])
                 anc_vec.append(abs_val_anc)
@@ -643,12 +643,13 @@ class TripletAttentionLoss_ss_pos_6(object):
         anc_vec = (torch.cat(anc_vec).reshape(B,anc_comb.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1)
         
         # CLS position vector 
-        if self.rel_cls:
-            if self.HEAD_WISE:
-                anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1,self.comb_idx)
-            else :
-                anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1, self.HEAD_NUM * self.comb_idx)
-            pos_vec_c = anc_vec_c[ind_pos_cls]
+        # if self.rel_cls:
+        #     if self.HEAD_WISE:
+        #         anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1,self.comb_idx)
+        #     else :
+        #         anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1, self.HEAD_NUM * self.comb_idx)
+        #     pos_vec_c = anc_vec_c[ind_pos_cls]
+    
         if self.comb :
             if self.HEAD_WISE:
                 if self.REPLACEMENT:
@@ -666,7 +667,8 @@ class TripletAttentionLoss_ss_pos_6(object):
             else :
                 anc_vec = anc_vec.reshape(B,-1,self.HEAD_NUM * self.comb_idx * self.comb_idx)
         pos_vec = anc_vec[ind_pos_cls]
-        #neg_vec = anc_vec[ind_neg_cls]
+        # pos_vec = (anc_vec.reshape(-1,ID,anc_vec.shape[-2],anc_vec.shape[-1])).mean(dim=1).repeat_interleave(ID,dim=0)
+        # neg_vec = anc_vec[ind_neg_cls]
         
         #################################################################################
         # cat_pos = torch.cat((ind_anc,ind_pos),dim=-1)
@@ -768,12 +770,14 @@ class TripletAttentionLoss_ss_pos_6(object):
                 if self.rel_cls:
                     if self.HEAD_WISE : 
                         position_loss_p = self.JSD_loss(anc_vec,pos_vec)
-                        position_loss_c = self.JSD_loss(anc_vec_c,pos_vec_c)
-                        position_loss = position_loss_p + position_loss_c
+                        position_loss = position_loss_p
+                        # position_loss_c = self.JSD_loss(anc_vec_c,pos_vec_c)
+                        # position_loss = position_loss_p + position_loss_c
                     else :
                         position_loss_p = self.LW_loss(anc_vec,pos_vec)
-                        position_loss_c = self.LW_loss(anc_vec_c,pos_vec_c)
-                        position_loss = position_loss_p + position_loss_c
+                        position_loss = position_loss_p
+                        # position_loss_c = self.LW_loss(anc_vec_c,pos_vec_c)
+                        # position_loss = position_loss_p + position_loss_c
                 else :
                     if self.HEAD_WISE : 
                         position_loss = self.JSD_loss(anc_vec,pos_vec)
@@ -1299,8 +1303,8 @@ class TripletAttentionLoss_ss_pos_7(object):
                 anc_vec = anc_vec.reshape(B,-1,self.comb_idx * self.comb_idx)
             else :
                 anc_vec = anc_vec.reshape(B,-1,self.HEAD_NUM * self.comb_idx * self.comb_idx)
-        pos_vec = anc_vec[ind_pos_cls]
         
+        pos_vec = anc_vec[ind_pos_cls]
         #neg_vec = anc_vec[ind_neg_cls]
         
         #################################################################################

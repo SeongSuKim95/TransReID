@@ -262,7 +262,7 @@ class Attention_relative_ABS(nn.Module):
         self.patch_size = patch_size
         # self.max_relative_position = 2
 
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads))
+        self.relative_position_bias_table = nn.Parameter(torch.zeros((patch_size[0])*(2*patch_size[1]-1),num_heads))
         
         coords_h = torch.arange(patch_size[1])
         coords_w = torch.arange(patch_size[0])
@@ -272,8 +272,7 @@ class Attention_relative_ABS(nn.Module):
         relative_coords[1] = torch.abs(relative_coords[1])
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
         relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
-        relative_coords[:, :, 1] += patch_size[0] - 1
-        relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
+        relative_coords[:, :, 0] *= patch_size[0]
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
         self.register_buffer("relative_position_index", relative_position_index)
         
@@ -703,7 +702,7 @@ class PatchEmbed_overlap(nn.Module):
 class TransReID_SSL(nn.Module):
     """ Transformer-based Object Re-Identification
     """
-    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12, num_heads=12, 
+    def __init__(self, img_size=224, patch_size=16, stride_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
                  mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0., camera=0, view=0,drop_path_rate=0.,
                  norm_layer=partial(nn.LayerNorm, eps=1e-6), local_feature=False, sie_xishu =1.0, hw_ratio=1,gem_pool = False, stem_conv=False, **kwargs):
         super().__init__()
@@ -729,7 +728,7 @@ class TransReID_SSL(nn.Module):
         rel_pos = kwargs['rel_pos']
         rel_cls = kwargs['rel_CLS']
         rel_abs = kwargs['rel_abs']
-
+        num_heads = kwargs['num_head']
         if self.abs_pos :
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
             trunc_normal_(self.pos_embed, std=.02)
@@ -1204,7 +1203,7 @@ def vit_base_patch16_224_TransReID(img_size=(256, 128), stride_size=16, drop_rat
 
 def vit_base_patch16_224_TransReID_SSL(img_size=(256, 128), stride_size=16, drop_rate=0.0, attn_drop_rate=0.0, drop_path_rate=0.1, camera=0, view=0,local_feature=False, sie_xishu=1.5,**kwargs):
     model = TransReID_SSL(
-        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,\
+        img_size=img_size, patch_size=16, stride_size=stride_size, embed_dim=768, depth=12, mlp_ratio=4, qkv_bias=True,\
         camera=camera, view=view, drop_path_rate=drop_path_rate, drop_rate=drop_rate, attn_drop_rate=attn_drop_rate,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), sie_xishu=sie_xishu, local_feature=local_feature, **kwargs)
 
