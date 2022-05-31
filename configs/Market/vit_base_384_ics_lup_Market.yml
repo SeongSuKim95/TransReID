@@ -11,7 +11,7 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
+  METRIC_LOSS_TYPE: 'triplet'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -22,9 +22,9 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : True
+  REL_POS : False
   REL_CLS : False
-  REL_ABS : True
+  REL_ABS : False
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -67,6 +67,8 @@ SOLVER:
   COMB : True
   REPLACEMENT : True
   COMB_INDEX : 5
+  WARMUP_EPOCHS : 5
+  WARMUP_FACTOR : 0.01
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -85,5 +87,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 425
-WANDB : True
+INDEX : 9999
+WANDB : False

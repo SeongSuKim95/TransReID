@@ -34,6 +34,7 @@ INPUT:
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
+  
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
@@ -51,7 +52,7 @@ SOLVER:
   MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
-  WARMUP_METHOD: 'linear'
+  WARMUP_METHOD: 'cosine'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 20
   LOG_PERIOD: 20
@@ -67,6 +68,8 @@ SOLVER:
   COMB : True
   REPLACEMENT : True
   COMB_INDEX : 5
+  WARMUP_EPOCHS : 20
+  WARMUP_FACTOR : 0.01
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -85,5 +88,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/msmt17_vit_base_384_128'
-INDEX : 604
+INDEX : 607
 WANDB : True
