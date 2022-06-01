@@ -12,6 +12,16 @@ class JSD(nn.Module):
         m = (0.5 * (p + q)).log()
         return 0.5 * (self.kl(p.log(), m) + self.kl(q.log(), m))
 
+class KLD_mean(nn.Module):
+    def __init__(self):
+        super(KLD_mean, self).__init__()
+        self.kl = nn.KLDivLoss(reduction='batchmean', log_target=True)
+        self.ID = 4
+    def forward(self, p: torch.tensor, q: torch.tensor):
+        p,q = p.log(), q.log()
+        q = (q.reshape(-1,self.ID,q.shape[-2],q.shape[-1])).mean(dim=1).repeat_interleave(self.ID,dim=0)
+        return self.kl(p,q)
+        
 class LayerWise_JSD(nn.Module):
     def __init__(self):
         super(LayerWise_JSD, self).__init__()

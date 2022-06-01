@@ -196,8 +196,10 @@ class Attention_relative_CLS(nn.Module):
         self.patch_size = patch_size
         # self.max_relative_position = 2
         self.patch_num = patch_size[0] * patch_size[1]
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1) + 2 * self.patch_num,num_heads))
-        
+        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads))
+        self.relative_position_bias_cls_col = nn.Parameter(torch.zeros(self.patch_num,num_heads))
+        self.relative_position_bias_cls_row = nn.Parameter(torch.zeros(self.patch_num,num_heads))
+
         coords_h = torch.arange(patch_size[1])
         coords_w = torch.arange(patch_size[0])
         coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
@@ -207,14 +209,9 @@ class Attention_relative_CLS(nn.Module):
         relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
         relative_coords[:, :, 1] += patch_size[0] - 1
         relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
+        
         relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        max_idx = relative_position_index.max() + 1
-        rel_CLS_row = torch.arange(max_idx, max_idx + self.patch_num)
-        rel_CLS_col = torch.arange(rel_CLS_row.max()+1, rel_CLS_row.max()+1+self.patch_num)
-        rel_CLS_row = torch.cat((relative_position_index[0][0].unsqueeze(0),rel_CLS_row))
 
-        relative_position_index = torch.column_stack((rel_CLS_col,relative_position_index))
-        relative_position_index = torch.row_stack((rel_CLS_row,relative_position_index))
         self.register_buffer("relative_position_index", relative_position_index)
         
         self.attn_drop = nn.Dropout(attn_drop)
@@ -222,21 +219,26 @@ class Attention_relative_CLS(nn.Module):
         self.proj_drop = nn.Dropout(proj_drop)
         
         trunc_normal_(self.relative_position_bias_table, std=.02)
+        trunc_normal_(self.relative_position_bias_cls_col, std=.02)
+        trunc_normal_(self.relative_position_bias_cls_row, std=.02)
+
         self.softmax = nn.Softmax(dim=-1)
     def forward(self, x, mask=None):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 
-        q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.patch_size[0] * self.patch_size[1] + 1, self.patch_size[0] * self.patch_size[1]+1, -1)  # Wh*Ww,Wh*Ww,nH
+            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn[:,:,:,:] = attn[:,:,:,:] + relative_position_bias.unsqueeze(0)
         
+        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
+        attn[:,:,0,1:] = attn[:,:,0,1:] + self.relative_position_bias_cls_row.permute(1,0).unsqueeze(0)
+        attn[:,:,1:,0] = attn[:,:,1:,0] + self.relative_position_bias_cls_col.permute(1,0).unsqueeze(0)
+        attn *= self.scale
         if mask is not None:
             nW = mask.shape[0]
             attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
@@ -288,7 +290,6 @@ class Attention_relative_ABS(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 
-        q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
@@ -296,7 +297,7 @@ class Attention_relative_ABS(nn.Module):
             self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
-        
+        attn *= self.scale
         if mask is not None:
             nW = mask.shape[0]
             attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
@@ -304,7 +305,7 @@ class Attention_relative_ABS(nn.Module):
             attn = self.softmax(attn)
         else:
             attn = self.softmax(attn)
-
+        
         attn = self.attn_drop(attn)
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
@@ -348,7 +349,6 @@ class Attention_relative(nn.Module):
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
 
-        q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
 
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
@@ -356,7 +356,7 @@ class Attention_relative(nn.Module):
             self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
-        
+        attn *= self.scale        
         if mask is not None:
             nW = mask.shape[0]
             attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)

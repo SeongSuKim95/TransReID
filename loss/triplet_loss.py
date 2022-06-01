@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 import torch.nn.functional as F
 import sys
 import wandb
-from .JSD_loss import JSD, LayerWise_JSD
+from .JSD_loss import JSD, LayerWise_JSD, KLD_mean
 def normalize_max(x, axis=-1):
     """Normalizing to unit length along the specified dimension.
     Args:
@@ -508,7 +508,7 @@ class TripletAttentionLoss_ss_pos_6(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, rel_cls, comb, replacement, comb_idx, jsd, head_wise, head_num, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, rel_cls, comb, replacement, comb_idx, jsd, head_wise, head_num, mean_pos, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
@@ -526,6 +526,8 @@ class TripletAttentionLoss_ss_pos_6(object):
         self.HEAD_WISE = head_wise
         self.HEAD_NUM = head_num
         self.KLD_loss = nn.KLDivLoss(reduction='batchmean')
+        self.KLD_mean = KLD_mean()
+        self.MEAN_POS = mean_pos
         self.REPLACEMENT = replacement
         self.weight_param = nn.Parameter(
             torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
@@ -614,10 +616,10 @@ class TripletAttentionLoss_ss_pos_6(object):
         anc_abs = []
         anc_vec = []
         if self.rel_cls:
-            rel_pos_bias_p = rel_pos_bias[:,1:,1:]
-            rel_pos_bias_c = rel_pos_bias[:,1:,0]
+            rel_pos_bias_p = rel_pos_bias
+            # rel_pos_bias_c = rel_pos_bias[:,1:,0]
             abs_pos_p = abs_pos[1:]
-            abs_pos_c = abs_pos[0]
+            # abs_pos_c = abs_pos[0]
             anc_vec_c = []
         else : 
             abs_pos = abs_pos[1:]
@@ -796,7 +798,11 @@ class TripletAttentionLoss_ss_pos_6(object):
                         #position_loss_rel = self.JSD_loss(anc_rel,pos_rel)
                         #position_loss_abs = self.JSD_loss(anc_abs,pos_abs)
                         #position_loss = position_loss_abs + position_loss_rel
-                        position_loss = self.JSD_loss(anc_vec,pos_vec)
+                        if self.MEAN_POS : 
+                            position_loss = self.KLD_mean(anc_vec,anc_vec)
+                        else :
+                            position_loss = self.JSD_loss(anc_vec,pos_vec)
+
             else :
                 position_loss = self.KLD_loss(anc_vec.log(),pos_vec.log())
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
@@ -1196,7 +1202,7 @@ class TripletAttentionLoss_ss_pos_7(object):
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet
     Loss for Person Re-Identification'."""
 
-    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, comb, comb_idx, jsd, head_wise, head_num, margin: Optional[float] = None, hard_factor=0.0):
+    def __init__(self, loss_ratio, patch_ratio, num_instance, max_epoch, rel_pos, comb, comb_idx, jsd, head_wise, head_num, mean_pos, margin: Optional[float] = None, hard_factor=0.0):
         self.margin = margin
         self.attn_loss = nn.MSELoss()
         self.hard_factor = hard_factor
@@ -1213,6 +1219,7 @@ class TripletAttentionLoss_ss_pos_7(object):
         self.HEAD_WISE = head_wise
         self.HEAD_NUM = head_num
         self.KLD_loss = nn.KLDivLoss(reduction='batchmean')
+        self.MEAN_POS = mean_pos
         self.weight_param = nn.Parameter(
             torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
         )
