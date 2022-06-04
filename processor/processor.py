@@ -1,5 +1,6 @@
 import logging
 import os
+from re import T
 import time
 import torch
 import torch.nn as nn
@@ -51,8 +52,16 @@ def do_train(cfg,
     loss_meter = AverageMeter()
     acc_meter = AverageMeter() # Averaging acc, loss 
     evaluator = R1_mAP_eval(num_query, max_rank=50, feat_norm=cfg.TEST.FEAT_NORM) # Evaluating R1, mAP
-
     scaler = amp.GradScaler()
+    if "pos" in triplet_type:
+        if REL_CLS:
+            tri_loss_meter = AverageMeter()    
+            pp_loss_meter = AverageMeter()
+            cp_loss_meter = AverageMeter()
+        else:
+            tri_loss_meter = AverageMeter()
+            pp_loss_meter = AverageMeter()
+            
     # train
     for epoch in range(1, epochs + 1):
         start_time = time.time()
@@ -94,13 +103,24 @@ def do_train(cfg,
                         bias_table = torch.cat(table_list,1).T
                         bias_index_dummy = bias_index.unsqueeze(0).expand(bias_table.size(0),bias_index.size(0))
                         rel_pos_bias = bias_table.gather(1,bias_index_dummy).reshape(-1,patch_num,patch_num)
+                        # if REL_CLS:
+                        #     cls_bias_list_col=[]
+                        #     cls_bias_list_row=[]
+                        #     for i in range(num_layers):
+                        #         cls_bias_list_col.append(model.base.blocks[i].attn.state_dict()['relative_position_bias_cls_col'])
+                        #         cls_bias_list_row.append(model.base.blocks[i].attn.state_dict()['relative_position_bias_cls_row'])
+                        #     cls_bias_list_col = torch.cat(cls_bias_list_col,1).T
+                        #     cls_bias_list_row = torch.cat(cls_bias_list_row,1).T
+                        #     cls_bias = torch.cat((cls_bias_list_col,cls_bias_list_row),dim=1)
                     if ABS_POS :
                         abs_pos = model.base.pos_embed[0]
-                    if triplet_type in ['triplet_ss_pos_4','triplet_ss_pos_6','triplet_ss_pos_7','triplet_ss_pos_8']:
-                        loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
+                    if triplet_type == 'triplet_ss_pos_6':
+                        if REL_CLS:
+                            loss, tri_loss, pp_loss = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
+                        else:
+                            loss, tri_loss, pp_loss = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos,model.classifier.state_dict()["weight"])
                     else :
-                        loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)
-               
+                        loss, patch_ratio = loss_fn(score,feat,target,target_cam,epoch,rel_pos_bias,abs_pos)      
                 else : 
                     loss = loss_fn(score,feat,target,target_cam)
 
@@ -121,26 +141,37 @@ def do_train(cfg,
 
             loss_meter.update(loss.item(), img.shape[0])
             acc_meter.update(acc, 1)
-
+            if "pos" in triplet_type:
+                if REL_CLS:
+                    tri_loss_meter.update(tri_loss.item(),img.shape[0])   
+                    pp_loss_meter.update(pp_loss.item(),img.shape[0])
+                    # cp_loss_meter.update(cp_loss.item(),img.shape[0])
+                else:
+                    tri_loss_meter.update(tri_loss.item(),img.shape[0])   
+                    pp_loss_meter.update(pp_loss.item(),img.shape[0])
             torch.cuda.synchronize() # cuda의 work group 내의 모든 wavefront속 kernel이 전부 연산을 마칠때까지 기다려줌 
             if (n_iter + 1) % log_period == 0:
 
-                if triplet_type in ['triplet_ss_1','triplet_ss_2','triplet_ss_pos']:
-
-                    logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}, Patch Ratio : {:.2f}"
-                                .format(epoch, (n_iter + 1), len(train_loader),
-                                        loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0],patch_ratio))
-                else :
-                    logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
+                logger.info("Epoch[{}] Iteration[{}/{}] Loss: {:.3f}, Acc: {:.3f}, Base Lr: {:.2e}"
                                 .format(epoch, (n_iter + 1), len(train_loader),
                                         loss_meter.avg, acc_meter.avg, scheduler._get_lr(epoch)[0]))
                 if cfg.WANDB : 
-                    if triplet_type in ['triplet_ss_1','triplet_ss_2','triplet_ss_pos']:
-                        wandb.log({ 'Train Epoch': epoch, 
-                                    'loss' : loss_meter.avg, 
-                                    'Learning rate': scheduler._get_lr(epoch)[0],
-                                    'Patch_ratio': patch_ratio,
-                                    'Acc': acc_meter.avg})
+                    if triplet_type in ['triplet_ss_1','triplet_ss_2','triplet_ss_pos_6']:
+                        if REL_CLS:
+                            wandb.log({ 'Train Epoch': epoch, 
+                                        'loss' : loss_meter.avg, 
+                                        'Learning rate': scheduler._get_lr(epoch)[0],
+                                        'tri_loss': tri_loss_meter.avg,
+                                        'pp_loss' : pp_loss_meter.avg,
+                                        # 'cp_loss' : cp_loss_meter.avg,
+                                        'Acc': acc_meter.avg})
+                        else :
+                            wandb.log({ 'Train Epoch': epoch, 
+                                        'loss' : loss_meter.avg, 
+                                        'Learning rate': scheduler._get_lr(epoch)[0],
+                                        'tri_loss': tri_loss_meter.avg,
+                                        'pp_loss' : pp_loss_meter.avg,
+                                        'Acc': acc_meter.avg})                      
                     else :
                          wandb.log({'Train Epoch': epoch, 
                                     'loss' : loss_meter.avg, 

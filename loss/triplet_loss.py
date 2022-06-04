@@ -617,10 +617,11 @@ class TripletAttentionLoss_ss_pos_6(object):
         anc_vec = []
         if self.rel_cls:
             rel_pos_bias_p = rel_pos_bias
-            # rel_pos_bias_c = rel_pos_bias[:,1:,0]
+            # rel_pos_bias_p = rel_pos_bias[:,:,1:]
+            # rel_pos_bias_c = rel_pos_bias[:,:,0]
             abs_pos_p = abs_pos[1:]
             # abs_pos_c = abs_pos[0]
-            anc_vec_c = []
+            # anc_vec_c = []
         else : 
             abs_pos = abs_pos[1:]
         for i in range(B):
@@ -632,6 +633,8 @@ class TripletAttentionLoss_ss_pos_6(object):
                     anc_vec.append(rel_val_anc_p + abs_val_anc_p)
 
                     # rel_val_anc_c = torch.stack([rel_pos_bias_c[:,x] for x in ind_anc_param[i]])
+                    # rel_val_anc_c = rel_val_anc_c.softmax(0).view(-1)
+
                     # anc_vec_c.append(rel_val_anc_c)
                 else : 
                     rel_val_anc = torch.stack([rel_pos_bias[:,x[0],x[1]] for x in anc_comb[i]])
@@ -648,13 +651,11 @@ class TripletAttentionLoss_ss_pos_6(object):
         anc_vec = (torch.cat(anc_vec).reshape(B,anc_comb.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1)
         # anc_rel = (torch.cat(anc_rel).reshape(B,anc_comb.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1)
         # anc_abs = (torch.cat(anc_abs).reshape(B,anc_comb.size(1)).softmax(-1))
+        
         # CLS position vector 
         # if self.rel_cls:
-        #     if self.HEAD_WISE:
-        #         anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1,self.comb_idx)
-        #     else :
-        #         anc_vec_c = (torch.cat(anc_vec_c).reshape(B,ind_anc_param.size(1),-1).transpose(-2,-1).softmax(-1)).reshape(B,-1, self.HEAD_NUM * self.comb_idx)
-        #     pos_vec_c = anc_vec_c[ind_pos_cls]
+        #         anc_vec_c = torch.cat(anc_vec_c).reshape(B,-1)
+        #          pos_vec_c = anc_vec_c[ind_pos_cls]
     
         if self.comb :
             if self.HEAD_WISE:
@@ -779,18 +780,18 @@ class TripletAttentionLoss_ss_pos_6(object):
             if self.JSD : 
                 if self.rel_cls:
                     if self.HEAD_WISE : 
-                        position_loss_p = self.JSD_loss(anc_vec,pos_vec)
-                        position_loss = position_loss_p
+                        position_loss_a = self.JSD_loss(anc_vec,pos_vec)
+                        # position_loss = position_loss_p
                         # position_loss_c = self.JSD_loss(anc_vec_c,pos_vec_c)
                         # position_loss = position_loss_p + position_loss_c
                     else :
                         position_loss_p = self.LW_loss(anc_vec,pos_vec)
-                        position_loss = position_loss_p
+                        # position_loss = position_loss_p
                         # position_loss_c = self.LW_loss(anc_vec_c,pos_vec_c)
-                        # position_loss = position_loss_p + position_loss_c
+                        position_loss_a = position_loss_p 
                 else :
                     if self.HEAD_WISE : 
-                        position_loss = self.JSD_loss(anc_vec,pos_vec)
+                        position_loss_a = self.JSD_loss(anc_vec,pos_vec)
                         # position_loss_rel = self.JSD_loss(anc_rel,pos_rel)
                         # position_loss_abs = self.JSD_loss(anc_abs,pos_abs)
                         # position_loss = position_loss_abs + position_loss_rel
@@ -799,12 +800,12 @@ class TripletAttentionLoss_ss_pos_6(object):
                         #position_loss_abs = self.JSD_loss(anc_abs,pos_abs)
                         #position_loss = position_loss_abs + position_loss_rel
                         if self.MEAN_POS : 
-                            position_loss = self.KLD_mean(anc_vec,anc_vec)
+                            position_loss_a = self.KLD_mean(anc_vec,anc_vec)
                         else :
-                            position_loss = self.JSD_loss(anc_vec,pos_vec)
+                            position_loss_a = self.JSD_loss(anc_vec,pos_vec)
 
             else :
-                position_loss = self.KLD_loss(anc_vec.log(),pos_vec.log())
+                position_loss_p = self.KLD_loss(anc_vec.log(),pos_vec.log())
             #loss_gap = self.ranking_loss(dist_an - dist_ap, y)
             loss_cls = self.ranking_loss(dist_an_cls - dist_ap_cls, y)
             # loss_cls_detach = self.ranking_loss(dist_an_cls - dist_ap_cls.detach(),y)
@@ -813,12 +814,14 @@ class TripletAttentionLoss_ss_pos_6(object):
             #loss_dist = self.ranking_loss(dist_position_neg - dist_position_pos,y)
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
-            loss = loss_cls + position_loss
+            loss = loss_cls + position_loss_a
             
             if torch.isnan(loss) or torch.isinf(loss) :
                 wandb.finish()
-
-        return loss, p_ratio, dist_ap_cls, dist_an_cls
+        if self.rel_cls:
+            return loss, loss_cls, position_loss_p, p_ratio, dist_ap_cls, dist_an_cls
+        else :
+            return loss, loss_cls, position_loss_a, p_ratio, dist_ap_cls, dist_an_cls 
 class TripletAttentionLoss_ss_pos_1(object):
     """Modified from Tong Xiao's open-reid (https://github.com/Cysu/open-reid).
     Related Triplet Loss theory can be found in paper 'In Defense of the Triplet

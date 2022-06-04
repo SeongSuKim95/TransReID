@@ -160,7 +160,7 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         TRI_LOSS = sum(TRI_LOSS) / len(TRI_LOSS)
                         TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
-                        TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, cls_param)[0] , triplet(feat, target, epoch, cls_param)[1]
+                        TRI_LOSS, PATCH_RATIO = triplet(feat, target, epoch, cls_param)[0] , triplet(feat, target, epoch, cls_param)[1]
                     return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
                             cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
 
@@ -235,10 +235,16 @@ def make_loss(cfg, num_classes):    # make loss는 class가 아닌 definition
                         TRI_LOSS = 0.5 * TRI_LOSS + 0.5 * triplet(feat[0], target)[0]
                     else:
                         #TRI_LOSS,PATCH_RATIO = triplet(feat, target, epoch, cls_param, pos_param)[0] , triplet(feat, target, epoch, cls_param, pos_param)[1]
-                        PATCH_RATIO = patch_ratio
-                        TRI_LOSS = triplet(feat, target, epoch, rel_pos_bias, abs_pos,cls_param)[0]
-                    return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
-                            cfg.MODEL.TRIPLET_LOSS_WEIGHT * TRI_LOSS, PATCH_RATIO
+                        if rel_cls:
+                            LOSS, TRI_LOSS, PP_LOSS, _, _, _, = triplet(feat,target,epoch,rel_pos_bias,abs_pos,cls_param)
+                        else:
+                            LOSS, TRI_LOSS, PP_LOSS, _, _, _ = triplet(feat, target, epoch, rel_pos_bias, abs_pos,cls_param)
+                    if rel_cls:
+                        return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
+                                cfg.MODEL.TRIPLET_LOSS_WEIGHT * LOSS, TRI_LOSS, PP_LOSS
+                    else:
+                        return cfg.MODEL.ID_LOSS_WEIGHT * ID_LOSS + \
+                                cfg.MODEL.TRIPLET_LOSS_WEIGHT * LOSS, TRI_LOSS, PP_LOSS 
         else:
             print('expected METRIC_LOSS_TYPE should be triplet, triplet_ss, triplet_ss_1, triplet_ss_2''but got {}'.format(loss_type))
     else:
