@@ -60,6 +60,7 @@ _C.MODEL.STEM_CONV = False
 _C.MODEL.REL_POS = False
 _C.MODEL.REL_CLS = False
 _C.MODEL.REL_ABS = False
+_C.MODEL.REL_CTX = False
 _C.MODEL.HEAD_NUM = 12
 _C.MODEL.ABS_POS = True
 # JPM Parameter

@@ -228,7 +228,6 @@ def do_train(cfg,
                     wandb.log({'Val Epoch': epoch, 'mAP' : mAP, 'Rank1' : cmc[0], 'Rank5': cmc[4], 'Rank10': cmc[9]})
                 torch.cuda.empty_cache()
 
-
 def do_inference(cfg,
                  model,
                  val_loader,

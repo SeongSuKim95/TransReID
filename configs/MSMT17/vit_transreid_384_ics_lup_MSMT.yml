@@ -88,5 +88,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/msmt17_vit_base_384_128'
-INDEX : 610
+INDEX : 7777
 WANDB : True

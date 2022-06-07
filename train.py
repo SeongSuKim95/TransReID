@@ -27,18 +27,24 @@ if __name__ == '__main__':
     #os.environ['CUDA_LAUNCH_BLOCKING'] = "0"
     parser = argparse.ArgumentParser(description="ReID Baseline Training")
     parser.add_argument(
-        "--config_file", default="configs/Market/vit_base_384_ics_lup.yml", help="path to config file", type=str
+        "--config_file", default="configs/Market/vit_base_384_ics_lup_Market.yml", help="path to config file", type=str
     )
     # config_file 이 있다면 defaults configuration에 over ride
     parser.add_argument("opts", help="Modify config options using the command-line", default=None,
                         nargs=argparse.REMAINDER)
     # command line에서도 argument 받아서 over ride
     parser.add_argument("--local_rank", default=0, type=int)
-    # parser.add_argument("--BASE_LR",default=0, type=float)
+    parser.add_argument("--BASE_LR",default=0, type=float)
+    parser.add_argument("--COMB_INDEX",default=0, type=int)
+    parser.add_argument("--LOSS_RATIO",default=0, type=float)
         
     args = parser.parse_args()
-    # args.opts.append("SOLVER.BASE_LR")
-    # args.opts.append(args.BASE_LR)
+    args.opts.append("SOLVER.BASE_LR")
+    args.opts.append(args.BASE_LR)
+    args.opts.append("SOLVER.COMB_INDEX")
+    args.opts.append(args.COMB_INDEX)
+    args.opts.append("SOLVER.LOSS_RATIO")
+    args.opts.append(args.LOSS_RATIO)
     if args.config_file != "":
         cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)

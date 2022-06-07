@@ -529,9 +529,7 @@ class TripletAttentionLoss_ss_pos_6(object):
         self.KLD_mean = KLD_mean()
         self.MEAN_POS = mean_pos
         self.REPLACEMENT = replacement
-        self.weight_param = nn.Parameter(
-            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
-        )
+
         if margin is not None:
             self.ranking_loss = nn.MarginRankingLoss(margin=margin)
         else:
@@ -814,7 +812,7 @@ class TripletAttentionLoss_ss_pos_6(object):
             #loss_dist = self.ranking_loss(dist_position_neg - dist_position_pos,y)
             #loss_cls_weighted_common = self.ranking_loss(dist_neg_common - dist_pos_common,y)
             #loss =  (1-self.loss_ratio) *loss_cls_weighted_common + self.loss_ratio * loss_cls_weighted
-            loss = loss_cls + position_loss_a
+            loss = loss_cls + self.loss_ratio * position_loss_a
             
             if torch.isnan(loss) or torch.isinf(loss) :
                 wandb.finish()
