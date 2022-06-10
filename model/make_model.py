@@ -179,11 +179,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                                                             loss_type = cfg.MODEL.METRIC_LOSS_TYPE,
                                                             gem_pool = cfg.MODEL.GEM_POOLING,
                                                             stem_conv = cfg.MODEL.STEM_CONV,
-                                                            ml = cfg.MODEL.ML,
-                                                            feat_cat = cfg.MODEL.IF_FEAT_CAT,
                                                             rel_pos = cfg.MODEL.REL_POS,
-                                                            rel_CLS = cfg.MODEL.REL_CLS,
-                                                            rel_abs = cfg.MODEL.REL_ABS,
                                                             abs_pos = cfg.MODEL.ABS_POS,
                                                             num_head = cfg.MODEL.HEAD_NUM)
         else :
@@ -271,11 +267,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                     cls_score = self.classifier(feat, label) # classifier에 label과 함께 통과
                 else:
-                    if self.METRIC_LOSS_TYPE in ['triplet_ss_1','triplet_ss_2']:
-                        bnn_cls_feat = self.bottleneck(cls_feat)
-                        cls_score = self.classifier(bnn_cls_feat)
-                        return cls_score, global_feat
-                    elif 'pos' in self.METRIC_LOSS_TYPE:
+                    if 'pos' in self.METRIC_LOSS_TYPE:
                         bnn_cls_feat = self.bottleneck(cls_feat)
                         cls_score = self.classifier(bnn_cls_feat)
                         return cls_score, global_feat
@@ -298,9 +290,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                 else:
                     # print("Test with feature before BN")
                     if self.IF_CAT :
-                         #return  cls_feat
                          cls_feat = self.bottleneck(cls_feat)
-                         #patch_feat = torch.mean(patch_feat,dim=1)
                          patch_feat = self.bottleneck_patch(torch.mean(patch_feat,dim=1))
                          return torch.cat((cls_feat,patch_feat),dim=1)
                     else :

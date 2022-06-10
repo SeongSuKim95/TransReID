@@ -184,134 +184,6 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
-
-class Attention_relative_CLS(nn.Module):
-    def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim ** -0.5
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.patch_size = patch_size
-        # self.max_relative_position = 2
-        self.patch_num = patch_size[0] * patch_size[1]
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads))
-        self.relative_position_bias_cls_col = nn.Parameter(torch.zeros(1,num_heads))
-        self.relative_position_bias_cls_row = nn.Parameter(torch.zeros(1,num_heads))
-
-        coords_h = torch.arange(patch_size[1])
-        coords_w = torch.arange(patch_size[0])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
-        coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
-        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
-        relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
-        relative_coords[:, :, 1] += patch_size[0] - 1
-        relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
-        
-        relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-
-        self.register_buffer("relative_position_index", relative_position_index)
-        
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-        
-        trunc_normal_(self.relative_position_bias_table, std=.02)
-        trunc_normal_(self.relative_position_bias_cls_col, std=.02)
-        trunc_normal_(self.relative_position_bias_cls_row, std=.02)
-
-        self.softmax = nn.Softmax(dim=-1)
-    def forward(self, x, mask=None):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-        
-        q *= self.scale
-        attn = (q @ k.transpose(-2, -1))
-
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        
-        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
-        attn[:,:,0,1:] = attn[:,:,0,1:] + self.relative_position_bias_cls_row.permute(1,0).unsqueeze(0)
-        attn[:,:,1:,0] = attn[:,:,1:,0] + self.relative_position_bias_cls_col.permute(1,0).unsqueeze(0)
-        
-        if mask is not None:
-            nW = mask.shape[0]
-            attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
-        else:
-            attn = self.softmax(attn)
-
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
-class Attention_relative_ABS(nn.Module):
-    def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim ** -0.5
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.patch_size = patch_size
-        # self.max_relative_position = 2
-
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((patch_size[0])*(2*patch_size[1]-1),num_heads))
-        
-        coords_h = torch.arange(patch_size[1])
-        coords_w = torch.arange(patch_size[0])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
-        coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
-        relative_coords[1] = torch.abs(relative_coords[1])
-        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
-        relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
-        relative_coords[:, :, 0] *= patch_size[0]
-        relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        self.register_buffer("relative_position_index", relative_position_index)
-        
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-        
-        trunc_normal_(self.relative_position_bias_table, std=.02)
-        self.softmax = nn.Softmax(dim=-1)
-        
-    def forward(self, x, mask=None):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
-        if mask is not None:
-            nW = mask.shape[0]
-            attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
-        else:
-            attn = self.softmax(attn)
-        
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x        
 class Attention_relative(nn.Module):
     def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -373,219 +245,14 @@ class Attention_relative(nn.Module):
         x = self.proj_drop(x)
         return x        
 
-class Attention_relative_CTX(nn.Module):
-    def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        self.scale = qk_scale or head_dim ** -0.5
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
-        self.patch_size = patch_size
-        # self.max_relative_position = 2
-
-        self.relative_position_bias_table = nn.Parameter(torch.zeros((2*patch_size[0]-1)*(2*patch_size[1]-1),num_heads,dim))
-        
-        coords_h = torch.arange(patch_size[1])
-        coords_w = torch.arange(patch_size[0])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
-        coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
-        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
-        relative_coords[:, :, 0] += patch_size[1] - 1  # shift to start from 0
-        relative_coords[:, :, 1] += patch_size[0] - 1
-        relative_coords[:, :, 0] *= 2 * patch_size[0] - 1
-        relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
-        self.register_buffer("relative_position_index", relative_position_index)
-        
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-        
-        trunc_normal_(self.relative_position_bias_table, std=.02)
-        self.softmax = nn.Softmax(dim=-1)
-        
-    def forward(self, x, mask=None):
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
-
-        q = q * self.scale
-        attn = (q @ k.transpose(-2, -1)) 
-
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)]
-        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-            self.patch_size[0] * self.patch_size[1], self.patch_size[0] * self.patch_size[1], -1)  # Wh*Ww,Wh*Ww,nH
-        relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
-        attn[:,:,1:,1:] = attn[:,:,1:,1:] + relative_position_bias.unsqueeze(0)
-
-        if mask is not None:
-            nW = mask.shape[0]
-            attn = attn.view(B // nW, nW, self.num_heads, N, N) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N)
-            attn = self.softmax(attn)
-        else:
-            attn = self.softmax(attn)
-
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x     
-class Cross_Attention(nn.Module): # triplet_ml
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        # self.scale = qk_scale or head_dim ** -0.5
-        self.stride = 16
-        self.A = nn.Linear(dim,dim*2,bias=qkv_bias)
-        self.P = nn.Linear(dim,dim*2,bias=qkv_bias)
-        self.N = nn.Linear(dim,dim*2,bias=qkv_bias)
-        self.PN_V = nn.Linear(dim, dim * 2, bias=qkv_bias)
-
-        self.attn_drop = nn.Dropout(attn_drop)
-        self.proj = nn.Linear(dim, dim)
-        self.proj_drop = nn.Dropout(proj_drop)
-
-    def forward(self, anchor, positive, negative):
-        B, N, C = anchor.shape
-
-        #Anchor_Q = self.A(anchor).reshape(B,N,1,C).permute(2,0,1,3)[0]
-        Anchor_Q_PN = self.A(anchor).reshape(B,N,2,C).permute(2,0,1,3)
-        Positive_KV = self.P(positive).reshape(B,N,2,C).permute(2,0,1,3)
-        Negative_KV = self.N(negative).reshape(B,N,2,C).permute(2,0,1,3)
-    
-    
-        Anchor_QP, Anchor_QN = Anchor_Q_PN[0], Anchor_Q_PN[1]
-        Positive_K, Positive_V = Positive_KV[0], Positive_KV[1].reshape(B,N,self.stride,C//self.stride)
-        Negative_K, Negative_V = Negative_KV[0], Negative_KV[1].reshape(B,N,self.stride,C//self.stride)
-
-        # Positive_attn = torch.sum(Anchor_Q * Positive_K,dim=-1) / self.scale
-        # Positive_Attn = (Anchor_Q * Positive_K).reshape(B,N,self.stride,C//self.stride)
-        # Negative_Attn = (Anchor_Q * Negative_K).reshape(B,N,self.stride,C//self.stride)
-
-        Positive_Attn = (Anchor_QP * Positive_K).reshape(B,N,self.stride,C//self.stride)
-        Negative_Attn = (Anchor_QN * Negative_K).reshape(B,N,self.stride,C//self.stride)
-
-        #Positive_attn = F.normalize(Positive_attn,p=1,dim=1) 
- 
-        # Positive_Attn = Positive_Attn.softmax(-1)
-        # Negative_Attn = Negative_Attn.softmax(-1)
- 
-        #Anchor_Q = Anchor_Q.reshape(B,N,self.stride,C//self.stride)
-        Anchor_QP = Anchor_QP.reshape(B,N,self.stride,C//self.stride)
-        Anchor_QN = Anchor_QN.reshape(B,N,self.stride,C//self.stride)
-
-        Anchor_P = (torch.mean(Anchor_QP,dim=-1)).view(B,-1)
-        Anchor_N = (torch.mean(Anchor_QN,dim=-1)).view(B,-1)
-
-        Positive = (torch.mean(Positive_Attn * Positive_V,dim=-1)).view(B,-1)
-        Negative = (torch.mean(Negative_Attn * Negative_V,dim=-1)).view(B,-1)
-
-        # x = torch.cat((Anchor,Positive,Negative),dim = 1)
-        # x = self.proj(x)
-        # x = self.proj_drop(x)
-        return Anchor_P,Anchor_N,Positive,Negative
-class Cross_distance_patch(nn.Module): # triplet_ml_1
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
-        super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
-        # self.scale = qk_scale or head_dim ** -0.5
-        self.stride = 16
-        self.A = nn.Linear(dim,dim,bias=qkv_bias)
-        self.weight_param = nn.Parameter(
-            torch.ones(1, dtype=torch.float, requires_grad=True).cuda()
-        )
-        self.t = 0.1
-    def forward(self, feature, p_inds, n_inds):
-        
-        anchor = feature[:,1:]
-        positive = feature[p_inds,1:]
-        negative = feature[n_inds,1:]
-        B, N, C = anchor.shape # Batch, Patch, Channel
-
-        dist_neg = torch.norm(anchor - negative, p=2, dim=-1)# patch wise distance
-        dist_pos = torch.norm(anchor - positive, p=2, dim=-1)
-        weight = torch.abs(dist_neg - dist_pos)
-        weight_max, _ = torch.max(weight,dim=1,keepdim=True)
-        weight = weight/ (weight_max + 1e-12)
-        weight [weight < self.t] = -self.weight_param 
-        weight = weight + self.weight_param # normalize 후 0.1 보다 작은 값은 0으로
-
-        # Anchor = self.A(anchor)
-        # Weighted_Anchor = Anchor * weight.unsqueeze(-1)
-        
-        Weighted_Anchor =  anchor * weight.unsqueeze(-1)
-        Weighted_Anchor = self.A(Weighted_Anchor)
-        
-        Weighted_Anchor = Weighted_Anchor.reshape(B,N,self.stride,C//self.stride)
-        
-        Anchor = (torch.mean(Weighted_Anchor,dim=-1)).view(B,-1)
-       
-        return Anchor
-class ML_Block_1(nn.Module):
-    # Attention Block
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.attn = Cross_distance_patch(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        # drop out 추가해 줄 필요 있음
-    def forward(self, x, labels):
-        cls_feat = x[:,0].detach()
-        dist_mat = euclidean_dist(cls_feat, cls_feat)
-        _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
-        # A = self.norm_A(A)
-        # P = self.norm_P(P)
-        # N = self.norm_N(N)
-        # AP,AN,P,N = self.attn(A,P,N)
-        # return torch.stack((AP,AN,P,N))
-        
-        A = self.attn(x,p_inds,n_inds)
-        return A, p_inds, n_inds
-class ML_Block(nn.Module):
-    # Attention Block
-    def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
-        super().__init__()
-        self.attn = Cross_Attention(
-            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-        # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
-        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
-        # drop out 추가해 줄 필요 있음
-    def forward(self, x, labels):
-        cls_feat = x[:,0].detach()
-        dist_mat = euclidean_dist(cls_feat, cls_feat)
-        _, _, p_inds, n_inds = hard_example_mining(dist_mat,labels,return_inds=True) # hard batch mining
-        A = x[:,1:]
-        P = x[p_inds,1:]
-        N = x[n_inds,1:]
-        # A = self.norm_A(A)
-        # P = self.norm_P(P)
-        # N = self.norm_N(N)
-        AP,AN,P,N = self.attn(A,P,N)
-        return torch.stack((AP,AN,P,N))
-        
 class Block(nn.Module):
     # Cross_Attention Block
-    def __init__(self, dim, num_heads, rel_pos, rel_cls, rel_abs, patch_size , mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+    def __init__(self, dim, num_heads, rel_pos, patch_size , mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.norm1 = norm_layer(dim)
         if rel_pos :
-            if rel_cls:
-                self.attn = Attention_relative_CLS(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-            elif rel_abs:
-                self.attn = Attention_relative_ABS(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
-            else:           
-                self.attn = Attention_relative(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+            self.attn = Attention_relative(dim, num_heads=num_heads, patch_size = patch_size, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
         else : 
             self.attn = Attention(dim,num_heads=num_heads,qkv_bias=qkv_bias,qk_scale=qk_scale,attn_drop=attn_drop,proj_drop=drop)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
@@ -721,7 +388,6 @@ class HybridEmbed(nn.Module):
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
 
-
 class PatchEmbed_overlap(nn.Module):
     """ Image to Patch Embedding with overlapping patches
     """
@@ -781,14 +447,9 @@ class TransReID_SSL(nn.Module):
         self.cam_num = camera
         self.view_num = view
         self.sie_xishu = sie_xishu
-        
         self.loss_type = kwargs['loss_type']
-        self.ml = kwargs['ml']
-        self.feat_cat = kwargs['feat_cat']
         self.abs_pos = kwargs['abs_pos']
         rel_pos = kwargs['rel_pos']
-        rel_cls = kwargs['rel_CLS']
-        rel_abs = kwargs['rel_abs']
         num_heads = kwargs['num_head']
         if self.abs_pos :
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
@@ -820,7 +481,7 @@ class TransReID_SSL(nn.Module):
 
         self.blocks = nn.ModuleList([
             Block(
-                dim=embed_dim, num_heads=num_heads, rel_pos = rel_pos, rel_cls = rel_cls, rel_abs = rel_abs, patch_size = patch_xy, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                dim=embed_dim, num_heads=num_heads, rel_pos = rel_pos, patch_size = patch_xy, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer)
             for i in range(depth)])
 
@@ -884,16 +545,9 @@ class TransReID_SSL(nn.Module):
         if self.gem_pool:
             gf = self.gem(x[:,1:].permute(0,2,1)).squeeze()
             return x[:, 0] + gf
-        if self.feat_cat :
+        if 'pos' in self.loss_type:
             return x
-        else :
-            if self.loss_type == "triplet":
-                return x[:, 0]
-            elif self.loss_type in ["triplet_ss_1","triplet_ss_2"]:
-                return x
-            elif 'pos' in self.loss_type:
-                return x
-    
+
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
         return x
@@ -1012,13 +666,6 @@ class TransReID(nn.Module):
 
         self.norm = norm_layer(embed_dim)
         
-        # Metric Learning Cross-Attention
-        if self.loss_type == "triplet_ml":    
-            self.ml_blocks = ML_Block(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    drop=drop_rate, attn_drop=attn_drop_rate)
-        elif self.loss_type == "triplet_ml_1":
-            self.ml_blocks = ML_Block_1(dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                    drop=drop_rate, attn_drop=attn_drop_rate)
         # Classifier head
         self.fc = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
         trunc_normal_(self.cls_token, std=.02)
@@ -1078,20 +725,7 @@ class TransReID(nn.Module):
             if self.feat_cat : 
                 return x 
             else :
-                if self.loss_type == "hnewth_patch" :
-                    return x
-                elif self.loss_type == "triplet_ml" or self.loss_type =="triplet_ml_1" :
-                    return x
-                elif self.loss_type == "triplet":
-                    return x[:, 0]
-                elif self.loss_type == "triplet_patch":
-                    return x
-                elif self.loss_type == "triplet_patch_noncat":
-                    return x
-                elif self.loss_type == "triplet_ss":
-                    return x
-                else : 
-                    return x[:, 0]
+                return x[:, 0]
     def forward(self, x, cam_label=None, view_label=None):
         x = self.forward_features(x, cam_label, view_label)
         return x
@@ -1165,7 +799,6 @@ class RelativePosition(nn.Module):
         self.max_patch_col = max_patch_col
         self.embeddings_table = nn.Parameter(torch.Tensor((2*max_patch_row-1)*(2*max_patch_col-1), num_heads))
         nn.init.xavier_uniform_(self.embeddings_table)
-
     def forward(self, length_q, length_k):
         range_vec_q = torch.arange(length_q)
         range_vec_k = torch.arange(length_k)
@@ -1174,7 +807,6 @@ class RelativePosition(nn.Module):
         final_mat = distance_mat_clipped + self.max_relative_position
         final_mat = torch.LongTensor(final_mat).cuda()
         embeddings = self.embeddings_table[final_mat].cuda()
-
         return embeddings
 
 class MultiHeadAttentionLayer(nn.Module):
@@ -1342,75 +974,3 @@ def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
         >>> nn.init.trunc_normal_(w)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
-
-def euclidean_dist(x, y):
-    """
-    Args:
-      x: pytorch Variable, with shape [m, d]
-      y: pytorch Variable, with shape [n, d]
-    Returns:
-      dist: pytorch Variable, with shape [m, n]
-    """
-    m, n = x.size(0), y.size(0)
-    xx = torch.pow(x, 2).sum(1, keepdim=True).expand(m, n)
-    yy = torch.pow(y, 2).sum(1, keepdim=True).expand(n, m).t()
-    dist = xx + yy
-    dist = dist - 2 * torch.matmul(x, y.t())
-    # dist.addmm_(1, -2, x, y.t())
-    dist = dist.clamp(min=1e-12).sqrt()  # for numerical stability
-    return dist
-
-def hard_example_mining(dist_mat, labels, return_inds=False):
-    """For each anchor, find the hardest positive and negative sample.
-    Args:
-      dist_mat: pytorch Variable, pair wise distance between samples, shape [N, N]
-      labels: pytorch LongTensor, with shape [N]
-      return_inds: whether to return the indices. Save time if `False`(?)
-    Returns:
-      dist_ap: pytorch Variable, distance(anchor, positive); shape [N]
-      dist_an: pytorch Variable, distance(anchor, negative); shape [N]
-      p_inds: pytorch LongTensor, with shape [N];
-        indices of selected hard positive samples; 0 <= p_inds[i] <= N - 1
-      n_inds: pytorch LongTensor, with shape [N];
-        indices of selected hard negative samples; 0 <= n_inds[i] <= N - 1
-    NOTE: Only consider the case in which all labels have same num of samples,
-      thus we can cope with all anchors in parallel.
-    """
-
-    assert len(dist_mat.size()) == 2
-    assert dist_mat.size(0) == dist_mat.size(1)
-    N = dist_mat.size(0)
-
-    # shape [N, N]
-    is_pos = labels.expand(N, N).eq(labels.expand(N, N).t())
-    is_neg = labels.expand(N, N).ne(labels.expand(N, N).t())
-
-    # `dist_ap` means distance(anchor, positive)
-    # both `dist_ap` and `relative_p_inds` with shape [N, 1]
-    dist_ap, relative_p_inds = torch.max(
-        dist_mat[is_pos].contiguous().view(N, -1), 1, keepdim=True)
-    # print(dist_mat[is_pos].shape)
-    # `dist_an` means distance(anchor, negative)
-    # both `dist_an` and `relative_n_inds` with shape [N, 1]
-    dist_an, relative_n_inds = torch.min(
-        dist_mat[is_neg].contiguous().view(N, -1), 1, keepdim=True)
-    # shape [N]
-    dist_ap = dist_ap.squeeze(1)
-    dist_an = dist_an.squeeze(1)
-
-    if return_inds:
-        # shape [N, N]
-        ind = (labels.new().resize_as_(labels)
-               .copy_(torch.arange(0, N).long())
-               .unsqueeze(0).expand(N, N))
-        # shape [N, 1]
-        p_inds = torch.gather(
-            ind[is_pos].contiguous().view(N, -1), 1, relative_p_inds.data)
-        n_inds = torch.gather(
-            ind[is_neg].contiguous().view(N, -1), 1, relative_n_inds.data)
-        # shape [N]
-        p_inds = p_inds.squeeze(1)
-        n_inds = n_inds.squeeze(1)
-        return dist_ap, dist_an, p_inds, n_inds
-
-    return dist_ap, dist_an

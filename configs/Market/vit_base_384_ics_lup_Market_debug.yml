@@ -23,9 +23,6 @@ MODEL:
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
   REL_POS : True
-  REL_CLS : False
-  REL_ABS : False
-  REL_CTX : False
   ABS_POS : True
   HEAD_NUM : 12
 
