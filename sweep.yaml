@@ -7,9 +7,6 @@ parameters:
   BASE_LR :
     min : 0.0001
     max : 0.0008
-  COMB_INDEX:
-    min : 2
-    max : 15
   LOSS_RATIO:
     min : 0.1
     max : 2.0

@@ -312,7 +312,6 @@ class Attention_relative_ABS(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         return x        
-
 class Attention_relative(nn.Module):
     def __init__(self, dim, patch_size, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -881,6 +880,7 @@ class TransReID_SSL(nn.Module):
             for blk in self.blocks:
                 x = blk(x)
             x = self.norm(x)
+        
         if self.gem_pool:
             gf = self.gem(x[:,1:].permute(0,2,1)).squeeze()
             return x[:, 0] + gf

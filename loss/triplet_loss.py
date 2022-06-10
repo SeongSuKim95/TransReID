@@ -576,10 +576,6 @@ class TripletAttentionLoss_ss_pos_6(object):
         # cls_similarity = cls_similarity.softmax(-1)
         # dist_mat = cosine_distance(global_feat,global_feat)
         #################################################
-        
-        # Method 5
-        pos_cls = cls_feat[ind_pos_cls]
-        neg_cls = cls_feat[ind_neg_cls]
 
         ####################################################################################################
         # anc_sim = (((cls_feat.unsqueeze(1) @ patch_feat_A.transpose(-1,-2)).squeeze(1))/scale).softmax(-1) 
