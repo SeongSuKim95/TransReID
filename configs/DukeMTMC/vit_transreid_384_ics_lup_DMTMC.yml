@@ -18,13 +18,11 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('1')
+  DEVICE_ID: ('0')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : False
-  REL_CLS : False
-  REL_ABS : False
+  REL_POS : True
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -85,5 +83,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/DMTMC_vit_base_384_128'
-INDEX : 705
+INDEX : 706
 WANDB : True

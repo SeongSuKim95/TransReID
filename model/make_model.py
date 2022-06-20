@@ -274,6 +274,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     else :
                         feat = self.bottleneck(global_feat) # base model을 통과한 feature를 bottleneck layer에 통과
                         cls_score = self.classifier(feat)
+                        return cls_score, global_feat
             # cls score는 bnneck을 통과한 이후의 feature가 classification layer를 통과하여 얻음, 이를 이용하여 ID loss 계산
             # 반면 triplet loss의 경우 base model만을 통과한 global_feature를 이용해서 계산
             if self.FEAT_NORM : 

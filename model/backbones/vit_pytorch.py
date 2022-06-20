@@ -545,7 +545,9 @@ class TransReID_SSL(nn.Module):
         if self.gem_pool:
             gf = self.gem(x[:,1:].permute(0,2,1)).squeeze()
             return x[:, 0] + gf
-        if 'pos' in self.loss_type:
+        if self.loss_type == "triplet":
+            return x[:, 0]
+        elif 'pos' in self.loss_type:
             return x
 
     def forward(self, x, cam_label=None, view_label=None):

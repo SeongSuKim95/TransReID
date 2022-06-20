@@ -34,15 +34,19 @@ if __name__ == '__main__':
                         nargs=argparse.REMAINDER)
     # command line에서도 argument 받아서 over ride
     parser.add_argument("--local_rank", default=0, type=int)
+    
     parser.add_argument("--BASE_LR",default=0, type=float)
     parser.add_argument("--LOSS_RATIO",default=0, type=float)
+    
     # parser.add_argument("--COMB_INDEX",default=0, type=int)
 
     args = parser.parse_args()
+
     args.opts.append("SOLVER.BASE_LR")
     args.opts.append(args.BASE_LR)
     args.opts.append("SOLVER.LOSS_RATIO")
     args.opts.append(args.LOSS_RATIO)
+    
     # args.opts.append("SOLVER.COMB_INDEX")
     # args.opts.append(args.COMB_INDEX)
     if args.config_file != "":

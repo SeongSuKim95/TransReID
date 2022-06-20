@@ -1,6 +1,7 @@
 import torch
 import math
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
 import argparse
 
@@ -39,13 +40,13 @@ def resize_pos_embed(posemb, posemb_new, hight, width):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualizing positional embedding similarity")
     parser.add_argument(
-        "--weight_dir", default="", help="path to weight file", type=str
+        "--weight_dir", default="pretrain/vit_image_net_224.pth", help="path to weight file", type=str
     )
     parser.add_argument(
-        "--patch_row", default="", help="Row number of patches", type=int
+        "--patch_row", default="28", help="Row number of patches", type=int
     )
     parser.add_argument(
-        "--patch_col", default="", help="col number of patches", type=int
+        "--patch_col", default="7", help="col number of patches", type=int
     )
     args = parser.parse_args()
 
@@ -64,12 +65,13 @@ if __name__ == "__main__":
     row = args.patch_row
     col = args.patch_col
     fig = plt.figure(figsize = (row,col))
+    gs1 = gridspec.GridSpec(row,col)
+    gs1.update(wspace=0,hspace=0.05)
     fig.suptitle(weight_name) 
+    
     for i in range(patch_num):
-        ax = plt.subplot(row,col,i+1)
-        axis_off(ax)
+        ax = plt.subplot(gs1[i])
+        plt.axis('off')
         plt.imshow(similarity[i].reshape(row,col))
-        ax.text(2.5,-1.5,f'({int(i/row)+1},{int(i%row)+1})',fontsize=12)
-    plt.subplots_adjust(hspace=0.3)
-
+        ax.set_aspect("equal")
     fig.savefig(f"pos_vis/{weight_name}.png")
