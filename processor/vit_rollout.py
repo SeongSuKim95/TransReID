@@ -119,6 +119,7 @@ class VITAttentionRollout:
         with torch.no_grad():
             output = self.model(input_tensor,cam_label=cam_label) # register_forward_hook으로 get_attention함수가 추가되어 있는 상태로 input_tensor의 forward가 진행
             # self.attentions list에 attention map들이 append 됨
+        # print(len(self.attentions))
         # print(len(self.attentions)) == 12
         # 이 map들을 가지고 roll out함수 수행
         if len(self.attentions) > 12 : # IF JPM branch exists, last 4 attention maps are ignored  

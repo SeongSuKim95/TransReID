@@ -106,8 +106,7 @@ dist_cos = result['Cos_dist']
 
 query_feature = query_feature.cuda()
 gallery_feature = gallery_feature.cuda()
-i = cfg.TEST.VISUALIZE_INDEX
-rank = cfg.TEST.VISUALIZE_RANK
+
 
 #######################################################################
 def sort_img_eucd(dist_eucd, index, ql, qc, gl, gc):
@@ -171,6 +170,7 @@ def max_rank_error(dist_mat, rank, ql, qc, gl, gc):
     dist_rank_score = np.zeros((query_length,rank))
 
     query_ID_wise_match = np.zeros(query_ID.max()+1).astype(int)
+    rank1_list = np.ones((query_length)).astype(bool)
 
     for idx in range(query_length):
         query_index = np.argwhere(gl==ql[idx]) # query label과 gallery index가 같은 index
@@ -189,7 +189,8 @@ def max_rank_error(dist_mat, rank, ql, qc, gl, gc):
         dist_rank_index[idx] = dist_index_idx[:rank]
         query_ID_wise_match[ql[idx]] += np.count_nonzero(gl[dist_rank_index[idx]] != ql[idx])
         dist_rank_score[idx] = dist_score_idx[:rank]
-    
+        if gl[dist_rank_index[idx]] != ql[idx]: # Rank 1 gallery가 틀릴 경우 Rank1 list에 False
+            rank1_list[idx] = False
     query_ID_wise_match = query_ID_wise_match[query_ID]
 
     Max_error_ID = query_ID[np.argsort(query_ID_wise_match)[-1]]
@@ -197,7 +198,7 @@ def max_rank_error(dist_mat, rank, ql, qc, gl, gc):
     Rank_error_idx = dist_rank_index[Max_error_ID_idx]
     Rank_error_score = dist_rank_score[Max_error_ID_idx]
 
-    return Max_error_ID_idx, Rank_error_idx, Rank_error_score
+    return Max_error_ID_idx, Rank_error_idx, Rank_error_score, rank1_list
 
 def max_dist(dist, rank, ql, qc, gl, gc):
     

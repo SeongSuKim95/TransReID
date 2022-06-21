@@ -225,8 +225,10 @@ def do_inference(cfg,
             #     else :
             #         mask_list = np.concatenate((mask_list,mask))
             # else :
-            #    feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            # feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            
             feat = model(img, cam_label=camids, view_label=target_view) # [256,768]
+            
             evaluator.update((feat, pid, camid))
             img_path_list.extend(imgpath)
     # feats : [76, 256, 768]

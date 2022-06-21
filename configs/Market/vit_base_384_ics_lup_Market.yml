@@ -72,22 +72,22 @@ SOLVER:
   WARMUP_EPOCHS : 5
   WARMUP_FACTOR : 0.01
 TEST:
-  EVAL: False
+  EVAL: True
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: './logs/market_vit_base_256_128/101/transformer_120_101.pth'
+  WEIGHT: '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/429/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
-  VISUALIZE : False
+  VISUALIZE : True
   VISUALIZE_INDEX : 777
-  VISUALIZE_RANK : 10
-  VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
+  VISUALIZE_RANK : 1
+  VISUALIZE_TYPE : 1 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'mean'
+  HEAD_FUSION : 'min'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
-
+  
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 777
-WANDB : True
+INDEX : 429
+WANDB : False
