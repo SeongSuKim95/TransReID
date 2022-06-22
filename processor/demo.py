@@ -86,6 +86,8 @@ model = make_model(cfg, num_class=dataset.num_train_pids, camera_num=dataset.num
 model.load_param(cfg.TEST.WEIGHT)
 model.eval()
 
+i = cfg.TEST.VISUALIZE_INDEX
+rank = cfg.TEST.VISUALIZE_RANK
 ######################################################################
 result = scipy.io.loadmat(f'result/result_matrix/{cfg.INDEX}.mat')
 

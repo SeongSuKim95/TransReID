@@ -80,11 +80,10 @@ transform = T.Compose([
 ])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
-
-WEIGHT1 = ''
-WEIGHT2 = ''
-INDEX1 = ''
-INDEX2 = ''
+WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/408/transformer_120.pth'
+WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/429/transformer_120.pth'
+INDEX1 = '408'
+INDEX2 = '429'
 dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
 
 model1 = make_model(cfg, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
@@ -119,7 +118,7 @@ gallery_cam = result1['gallery_cam'][0]
 gallery_label = result1['gallery_label'][0]
 g_root = result1['g_dir'][0]
 gallery_path_list = result1['img_path'][query_label.size:]
-
+rank = 1
 #######################################################################
 def sort_img_eucd(dist_eucd, index, ql, qc, gl, gc):
     
@@ -203,35 +202,40 @@ def rank_1_idx(dist_mat1, dist_mat2, ql, qc, gl, gc):
         dist_mask2 = np.in1d(dist_index2[idx], junk_index, invert=True) 
         
         dist_index_idx1 = dist_index1[idx][dist_mask1]
-        dist_score_idx1 = dist_score1[idx][dist_mask1]
+        # dist_score_idx1 = dist_score1[idx][dist_mask1]
 
         dist_index_idx2 = dist_index2[idx][dist_mask2]
-        dist_score_idx2 = dist_score2[idx][dist_mask2]
+        # dist_score_idx2 = dist_score2[idx][dist_mask2]
 
         dist_rank_index_1[idx] = dist_index_idx1[0]
         dist_rank_index_2[idx] = dist_index_idx2[0]
-        if (gl[dist_rank_index_1[idx]] == ql[idx]) and (gl[dist_rank_index_2[idx] != ql[idx]]) : # Model 1에선 맞췄으나 Model 2 에서 틀린 경우
+        if (gl[dist_rank_index_1[idx]] == ql[idx]) and (gl[dist_rank_index_2[idx]] != ql[idx]) : # Model 1에선 맞췄으나 Model 2 에서 틀린 경우
             rank1_list_1[idx] = True
-        if (gl[dist_rank_index_2[idx]] == ql[idx]) and (gl[dist_rank_index_1[idx] != ql[idx]]) : # Model 2에선 맞췄으나 Model 1 에서 틀린 경우
+        if (gl[dist_rank_index_2[idx]] == ql[idx]) and (gl[dist_rank_index_1[idx]] != ql[idx]) : # Model 2에선 맞췄으나 Model 1 에서 틀린 경우
             rank1_list_2[idx] = True
         
-        dist_rank_score_1[idx] = dist_score_idx1[0]
-        dist_rank_score_2[idx] = dist_score_idx2[0]
+        # dist_rank_score_1[idx] = dist_score_idx1[0]
+        # dist_rank_score_2[idx] = dist_score_idx2[0]
+    
+    r1_list_1to1 = dist_rank_index_1[rank1_list_1]
+    r1_list_2to2 = dist_rank_index_2[rank1_list_2]
+    r1_list_1to2 = dist_rank_index_2[rank1_list_1]
+    r1_list_2to1 = dist_rank_index_1[rank1_list_2]    
 
-    return rank1_list_1,rank1_list_2,dist_rank_score_1,dist_rank_score_2
+    return rank1_list_1, rank1_list_2, r1_list_1to1, r1_list_2to2, r1_list_1to2, r1_list_2to1
 
 
-def Attention_map(img_path,cam_label=None):
+def Attention_map(img_path,model,cam_label=None):
     img = Image.open(img_path)
     img_input = img.resize(cfg.INPUT.SIZE_TEST)
     input_tensor = transform(img_input).unsqueeze(0)
     if args.use_cuda:
         input_tensor = input_tensor.cuda()
+    
+    # Attention map for model 1
     attention_rollout = VITAttentionRollout(model, head_fusion=cfg.TEST.HEAD_FUSION, 
     discard_ratio=cfg.TEST.DISCARD_RATIO)
     mask = attention_rollout(input_tensor,cam_label)
-    # name = "attention_rollout_{:.3f}_{}.png".format(args.discard_ratio, args.head_fusion)
-
     np_img = np.array(img)[:, :, ::-1]
     mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
     mask = show_mask_on_image(np_img, mask)
@@ -240,77 +244,152 @@ def Attention_map(img_path,cam_label=None):
 
     return mask
 
-# cv2.imwrite("./result/"+sname, mask)
-# index,score = sort_img(query_feature[i],query_label[i],query_cam[i],gallery_feature,gallery_label,gallery_cam)
-# query_feature[i].size() = 768
-# gallery_feature.size() = [15913,768]
-
 ###########################
 #Visualize the rank result#
 ###########################
 
-R1_list_1,R1_list_2,dist_1,dist_2 = rank_1_idx(result1,result2,query_label,query_cam,gallery_label,gallery_cam)
+R1_q_1,R1_q_2,R1_1to1,R1_2to2,R1_1to2,R1_2to1 = rank_1_idx(dist_eucd_1,dist_eucd_2,query_label,query_cam,gallery_label,gallery_cam)
 
+# For model 1 --> 2 (Query, Rank1 gallery in 1, Rank1 gellery in 2)
 
-if cfg.TEST.VISUALIZE_TYPE == 0 :
-    query_path = (q_root +'/'+ query_path_list[i]).rstrip()
-    query_label_i = query_label[i]
-    query_cam_i = query_cam[i]
-    print(query_path)
-    print('Top 10 images are as follow:')
-    fig = plt.figure(figsize=(16,8)) #단위 인치
-    fig.suptitle(f'TEST_SIZE : {cfg.INPUT.SIZE_TEST}, METRIC: {cfg.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg.TEST.HEAD_FUSION}', fontsize=16) 
-    ax = plt.subplot(2,rank+1,1) # row, col, index
-    axis_off(ax)
-    imshow(query_path,'Query')
-    ax.text(10,140,f"ID : {query_label_i}")
-    ax.text(10,152,f"Cam : {query_cam_i}")
-    if cfg.MODEL.SIE_CAMERA:
-        mask = Attention_map(query_path,query_cam_i)
-    else:
-        mask = Attention_map(query_path)
-    attn_ax = plt.subplot(2,rank+1,rank+2)
-    axis_off(attn_ax)
-    plt.imshow(mask)
-    plt.title('Query')
+R1_q_1_path = query_path_list[R1_q_1]
+R1_q_1_label = query_label[R1_q_1]
+R1_q_1_cam = query_cam[R1_q_1]
+
+gallery_path_1to1 = gallery_path_list[R1_1to1]
+gallery_path_1to2 = gallery_path_list[R1_1to2]
+
+gallery_label_1to1 = gallery_label[R1_1to1]
+gallery_label_1to2 = gallery_label[R1_1to2]
+
+gallery_cam_1to1 = gallery_label[R1_1to1]
+gallery_cam_1to2 = gallery_label[R1_1to2]
+
+# For model 2 --> 1 (Query, Rank1 gallery in 2, Rank1 gellery in 1)
+
+R1_q_2_path = query_path_list[R1_q_2]
+R1_q_2_label = query_label[R1_q_2]
+R1_q_2_cam = query_cam[R1_q_2]
+
+gallery_path_2to1 = gallery_path_list[R1_2to1]
+gallery_path_2to2 = gallery_path_list[R1_2to2]
+
+gallery_label_2to1 = gallery_label[R1_2to1]
+gallery_label_2to2 = gallery_label[R1_2to2]
+
+gallery_cam_2to1 = gallery_cam[R1_2to1]
+gallery_cam_2to2 = gallery_cam[R1_2to2]
+
+num1 = len(R1_q_1_path)
+num2 = len(R1_q_2_path)
+
+# For INDEX 1
+fig1 = plt.figure(figsize=(5,num1)) #단위 인치
+fig1.suptitle(f'TEST_SIZE : {cfg.INPUT.SIZE_TEST}, METRIC: {cfg.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg.TEST.HEAD_FUSION}', fontsize=5) 
+for i in range(num1):
+    query_path = (q_root +'/'+ R1_q_1_path[i]).rstrip()
+    query_label_i = R1_q_1_label[i]
+    query_cam_i = R1_q_1_cam[i]
+
+    gallery_path_1to1_i = (g_root + '/' + gallery_path_1to1[i]).rstrip()
+    gallery_label_1to1_i = gallery_label_1to1[i]
+    gallery_path_1to2_i = (g_root + '/' + gallery_path_1to2[i]).rstrip()
+    gallery_label_1to2_i = gallery_label_1to2[i]
+    print(f"{i}th image : {query_path}")
     
-    if cfg.TEST.VISUALIZE_METRIC == 'Euclidean':
-        index,score = sort_img_eucd(dist_eucd,i,query_label,query_cam,gallery_label,gallery_cam)
-    elif cfg.TEST.VISUALIZE_METRIC == 'Cos' :
-        index,score = sort_img_cos(dist_cos,i,query_label,query_cam,gallery_label,gallery_cam)
-    else :
-        raise NotImplementedError("Visualize metric should be Euclidean or Cosine similarity")
-    for i in range(rank):
-        ax = plt.subplot(2,rank+1,i+2)
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-        img_path = (g_root + '/' + gallery_path_list[index[i]]).rstrip()
-        label = gallery_label[index[i]]
-        cam = gallery_cam[index[i]]
-        similarity_score = score[i]
-        imshow(img_path)
-        if label == query_label_i:
-            ax.set_title('%d'%(i+1), color='green')
-            axis_set(ax,'green',4)
-        else:
-            ax.set_title('%d'%(i+1), color='red')
-            axis_set(ax,'red',4)
+    # Query Image (Model 1 : True, Model2 : False)
+    query_ax = plt.subplot(num1,7,7*i+1) # row, col, index
+    # ax.get_xaxis().set_visible(False)
+    # ax.get_yaxis().set_visible(False)
+    axis_off(query_ax)
+    imshow(query_path)
+    if i == 0 :
+        plt.title('Query',fontsize=6)
+    
+    axis_set(query_ax, color="black",linewidth=1)
+    # ax.text(10,140,f"ID : {query_label_i}")
+    # ax.text(10,152,f"Cam : {query_cam_i}")
+    query_1to1 = Attention_map(query_path,model1)
+    query_1to2 = Attention_map(query_path,model2)
+    gallery_1to1 = Attention_map(gallery_path_1to1_i,model1)
+    gallery_1to2 = Attention_map(gallery_path_1to2_i,model2)
+    
+    # Attention map of Query for MODEL 1 
+    attn_ax1 = plt.subplot(num1,7,7*i+2)
+    axis_off(attn_ax1)
+    plt.imshow(query_1to1)
+    axis_set(attn_ax1, color="black",linewidth=1)
 
-        ax.text(10,140,f"ID : {label}",)
-        ax.text(10,152,f"Cam : {cam}",)  
-        ax.text(0,164,"Score : {:.3f}".format(similarity_score))
-        
-        ax = plt.subplot(2,rank+1,i+rank+2+1)
-        axis_off(ax)
-        if cfg.MODEL.SIE_CAMERA:
-            mask = Attention_map(img_path,cam)
-        else:
-            mask = Attention_map(img_path)
-        plt.imshow(mask)
-        print(img_path)
+    # Rank1 Gallery Image for MODEL 1
+    gallery_ax = plt.subplot(num1,7,7*i+3)
+    axis_off(gallery_ax)
+    imshow(gallery_path_1to1_i)
+    axis_set(gallery_ax, color = "green", linewidth=1)
+    # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
+    plt.title(f'ID : {gallery_label_1to1_i}',fontsize = 6)
 
-    plt.subplots_adjust(hspace=0.01)
-    result_img_path = f'result/result_visualize/{cfg.INDEX}'
-    os.makedirs(result_img_path,exist_ok=True)
-    fig.savefig(f"{result_img_path}/{cfg.TEST.VISUALIZE_TYPE}_{cfg.TEST.VISUALIZE_INDEX}_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}_{cfg.TEST.VISUALIZE_METRIC}.png")
+    # Attention map of Gallery Image for MODEL 1
+    attn_ax2 = plt.subplot(num1,7,7*i+4)
+    axis_off(attn_ax2)
+    plt.imshow(gallery_1to1)
+    axis_set(attn_ax2, color = "green", linewidth=1)
+
+    # Attention map of Query for MODEL 2
+    attn_ax3 = plt.subplot(num1,7,7*i+5)
+    axis_off(attn_ax3)
+    plt.imshow(query_1to2)
+    axis_set(attn_ax3, color = "black", linewidth=1)
+
+    # Rank 1 Gallery Image for MODEL 2
+    gallery_ax = plt.subplot(num1,7,7*i+6)
+    axis_off(gallery_ax)
+    axis_set(gallery_ax, color = "red", linewidth=1)
+    imshow(gallery_path_1to2_i)
+    # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
+    plt.title(f'ID : {gallery_label_1to2_i}',fontsize = 6)
+    
+    # Attention map of Gallery Image for MODEL 2
+    attn_ax4 = plt.subplot(num1,7,7*i+7)
+    axis_off(attn_ax4)
+    axis_set(attn_ax4, color = "red", linewidth=1)
+    plt.imshow(gallery_1to2)
+    # plt.title(f'{INDEX2}')
+    
+plt.subplots_adjust(wspace =0.02,hspace=0.25)
+result_img_path = f'result/result_visualize/R1_comparision/{INDEX1}&{INDEX2}'
+os.makedirs(result_img_path,exist_ok=True)
+fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparision_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}.png")
+
+# For INDEX 2
+
+# fig2 = plt.figure(figsize=(1.5,num2)) #단위 인치
+# fig2.suptitle(f'TEST_SIZE : {cfg.INPUT.SIZE_TEST}, METRIC: {cfg.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg.TEST.HEAD_FUSION}', fontsize=8) 
+# for i in range(num2):
+#     query_path = (q_root +'/'+ R1_q_2_path[i]).rstrip()
+#     query_label_i = R1_q_2_label[i]
+#     query_cam_i = R1_q_2_cam[i]
+#     print(f"{i}th image : {query_path}")
+#     ax = plt.subplot(num2,3,3*i+1) # row, col, index
+#     # ax.get_xaxis().set_visible(False)
+#     # ax.get_yaxis().set_visible(False)
+#     axis_off(ax)
+#     imshow(query_path,'Query')
+#     # ax.text(10,140,f"ID : {query_label_i}")
+#     # ax.text(10,152,f"Cam : {query_cam_i}")
+
+#     mask1,mask2 = Attention_map(query_path,model2,model1)
+    
+#     attn_ax1 = plt.subplot(num2,3,3*i+2)
+#     axis_off(attn_ax1)
+#     plt.imshow(mask1)
+#     plt.title(f'{INDEX2}')
+#     attn_ax2 = plt.subplot(num2,3,3*i+3)
+#     axis_off(attn_ax2)
+#     plt.imshow(mask2)
+#     plt.title(f'{INDEX1}')
+    
+# plt.subplots_adjust(wspace = 0.05,hspace=0.05)
+# result_img_path = f'result/result_visualize/R1_comparision/{INDEX1}&{INDEX2}'
+# os.makedirs(result_img_path,exist_ok=True)
+# fig2.savefig(f"{result_img_path}/{INDEX2}&{INDEX1}_R1comparision_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}.png")
 

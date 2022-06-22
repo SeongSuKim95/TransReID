@@ -83,11 +83,11 @@ TEST:
   VISUALIZE_RANK : 1
   VISUALIZE_TYPE : 1 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'min'
+  HEAD_FUSION : 'mean'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
   
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 429
+INDEX : 999
 WANDB : False
