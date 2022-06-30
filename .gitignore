@@ -2,6 +2,9 @@
 logs
 pretrain
 wandb
+result
+pos_vis
+Debug_figure
 __pycache__
 
 # temporary files which can be created if a process still has a handle open of a deleted file
@@ -15,6 +18,7 @@ __pycache__
 
 # .nfs files are created when an open file is removed but is still being accessed
 .nfs*
+
 
 
 *.DS_Store

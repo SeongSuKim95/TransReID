@@ -11,7 +11,7 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet'
+  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -86,5 +86,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/msmt17_vit_base_384_128'
-INDEX : 612
+INDEX : 608
 WANDB : True

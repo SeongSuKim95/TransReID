@@ -355,7 +355,7 @@ for i in range(num1):
     plt.imshow(gallery_1to2)
     # plt.title(f'{INDEX2}')
     
-plt.subplots_adjust(wspace =0.02,hspace=0.25)
+plt.subplots_adjust(wspace =0.02,hspace=0.3)
 result_img_path = f'result/result_visualize/R1_comparision/{INDEX1}&{INDEX2}'
 os.makedirs(result_img_path,exist_ok=True)
 fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparision_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}.png")

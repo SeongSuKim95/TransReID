@@ -130,3 +130,32 @@ class VITAttentionRollout:
 # discard_ratio=args.discard_ratio)
 # mask = attention_rollout(input_tensor)
 
+class VITAttentionRollout_with_patches:
+    def __init__(self, model, attention_layer_name='attn_drop', head_fusion="mean",
+        discard_ratio=0.9):
+        # attention_layer_name 'attn_drop' == MSA layer
+        self.model = model
+        self.head_fusion = head_fusion
+        self.discard_ratio = discard_ratio
+        #print(attention_layer_name)
+        for name, module in self.model.named_modules():  # model의 sub module에 대해, 만약 'attn_drop(MSA layer)'이 sub module에 있다면
+            if attention_layer_name in name: # 각 layer의 MSA layer에 대해
+                module.register_forward_hook(self.get_attention) # 매 layer마다 attention map을 추출하기 위하여 모듈 이름을 이용하여 attention map을 담음
+                # register_forward_hook : 해당 layer 다음에 self.get_attention 함수 삽입 (수행 X, 함수만 추가)
+        self.attentions = []
+
+    def get_attention(self, module, input, output):
+        # output.size() = torch.size([batch,12,257,257])
+        self.attentions.append(output.cpu())
+
+    def __call__(self, input_tensor,cam_label=None):
+        self.attentions = []
+        with torch.no_grad():
+            output = self.model(input_tensor,cam_label=cam_label) # register_forward_hook으로 get_attention함수가 추가되어 있는 상태로 input_tensor의 forward가 진행
+            # self.attentions list에 attention map들이 append 됨
+        # print(len(self.attentions))
+        # print(len(self.attentions)) == 12
+        # 이 map들을 가지고 roll out함수 수행
+        if len(self.attentions) > 12 : # IF JPM branch exists, last 4 attention maps are ignored  
+            self.attentions = self.attentions[:12]
+        return rollout(self.attentions, self.discard_ratio, self.head_fusion,input_tensor.shape), output

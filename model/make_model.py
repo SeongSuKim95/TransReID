@@ -297,7 +297,7 @@ class build_transformer(nn.Module): # nn.Module 상속
                     else :
                         return self.bottleneck(cls_feat)
             else:
-                return global_feat
+                return torch.cat((self.bottleneck(cls_feat),global_feat.squeeze(0)[1:]))
     def load_param(self, trained_path):
         param_dict = torch.load(trained_path)
         for i in param_dict:
