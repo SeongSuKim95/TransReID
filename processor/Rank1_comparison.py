@@ -2,8 +2,10 @@ import argparse
 import scipy.io
 import torch
 import numpy as np
-from config import cfg
 import os
+from config import cfg as cfg_1
+from config import cfg_test as cfg_2 
+
 from torchvision import datasets
 import matplotlib
 matplotlib.use('agg')
@@ -22,6 +24,7 @@ from datasets.market1501 import Market1501
 from datasets.msmt17 import MSMT17
 from datasets.veri import VeRi
 from datasets.vehicleid import VehicleID
+from datasets.cuhk03np import Cuhk03np
 
 def axis_set(ax,color,linewidth):
     for pos in ['left','right','top','bottom']:
@@ -52,6 +55,7 @@ __factory = {
     'market1501': Market1501,
     'dukemtmc': DukeMTMCreID,
     'msmt17': MSMT17,
+    'cuhk03' : Cuhk03np,
     'occ_duke': OCC_DukeMTMCreID,
     'veri': VeRi,
     'VehicleID': VehicleID,
@@ -60,7 +64,8 @@ __factory = {
 #######################################################################
 # Evaluate
 parser = argparse.ArgumentParser(description='Demo')
-parser.add_argument("--config_file", default="", help="path to config file", type=str)
+parser.add_argument("--config_file1", default="", help="path to config file1", type=str)
+parser.add_argument("--config_file2", default="", help="path to config file2", type=str)
 parser.add_argument('--use_cuda', action='store_true', default=False,help='Use NVIDIA GPU acceleration')
 
 # parser.add_argument('--test_dir',default='/mnt/hdd_data/Dataset/market1501',type=str, help='./test_data')
@@ -68,29 +73,36 @@ parser.add_argument("opts", help="Modify config options using the command-line",
                         nargs=argparse.REMAINDER)
 args = parser.parse_args()
 
-if args.config_file != "":
-        cfg.merge_from_file(args.config_file)
-cfg.merge_from_list(args.opts)
-cfg.freeze()
+if args.config_file1 != "":
+        cfg_1.merge_from_file(args.config_file1)
+cfg_1.merge_from_list(args.opts)
+cfg_1.freeze()
+
+
+if args.config_file2 != "":
+        cfg_2.merge_from_file(args.config_file2)
+cfg_2.merge_from_list(args.opts)
+cfg_2.freeze()
+
 
 transform = T.Compose([
-    T.Resize(cfg.INPUT.SIZE_TEST),
+    T.Resize(cfg_1.INPUT.SIZE_TEST),
     T.ToTensor(),
-    T.Normalize(mean=cfg.INPUT.PIXEL_MEAN, std=cfg.INPUT.PIXEL_STD)
+    T.Normalize(mean=cfg_1.INPUT.PIXEL_MEAN, std=cfg_1.INPUT.PIXEL_STD)
 ])
 
-os.environ['CUDA_VISIBLE_DEVICES'] = cfg.MODEL.DEVICE_ID
-WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/408/transformer_120.pth'
-WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/429/transformer_120.pth'
-INDEX1 = '408'
-INDEX2 = '429'
-dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR)
+os.environ['CUDA_VISIBLE_DEVICES'] = cfg_1.MODEL.DEVICE_ID
+WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/802/transformer_120.pth'
+WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/801/transformer_120.pth'
+INDEX1 = '802'
+INDEX2 = '801'
+dataset = __factory[cfg_1.DATASETS.NAMES](root=cfg_1.DATASETS.ROOT_DIR)
 
-model1 = make_model(cfg, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
+model1 = make_model(cfg_1, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
 model1.load_param(WEIGHT1)
 model1.eval()
 
-model2= make_model(cfg, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
+model2= make_model(cfg_2, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
 model2.load_param(WEIGHT2)
 model2.eval()
  
@@ -227,14 +239,14 @@ def rank_1_idx(dist_mat1, dist_mat2, ql, qc, gl, gc):
 
 def Attention_map(img_path,model,cam_label=None):
     img = Image.open(img_path)
-    img_input = img.resize(cfg.INPUT.SIZE_TEST)
+    img_input = img.resize(cfg_1.INPUT.SIZE_TEST)
     input_tensor = transform(img_input).unsqueeze(0)
     if args.use_cuda:
         input_tensor = input_tensor.cuda()
     
     # Attention map for model 1
-    attention_rollout = VITAttentionRollout(model, head_fusion=cfg.TEST.HEAD_FUSION, 
-    discard_ratio=cfg.TEST.DISCARD_RATIO)
+    attention_rollout = VITAttentionRollout(model, head_fusion=cfg_1.TEST.HEAD_FUSION, 
+    discard_ratio=cfg_1.TEST.DISCARD_RATIO)
     mask = attention_rollout(input_tensor,cam_label)
     np_img = np.array(img)[:, :, ::-1]
     mask = cv2.resize(mask, (np_img.shape[1], np_img.shape[0]))
@@ -250,7 +262,7 @@ def Attention_map(img_path,model,cam_label=None):
 
 R1_q_1,R1_q_2,R1_1to1,R1_2to2,R1_1to2,R1_2to1 = rank_1_idx(dist_eucd_1,dist_eucd_2,query_label,query_cam,gallery_label,gallery_cam)
 
-# For model 1 --> 2 (Query, Rank1 gallery in 1, Rank1 gellery in 2)
+# For model 1 --> 2 (Query, Rank1 gallery in 1, Rank1 gallery in 2)
 
 R1_q_1_path = query_path_list[R1_q_1]
 R1_q_1_label = query_label[R1_q_1]
@@ -265,27 +277,27 @@ gallery_label_1to2 = gallery_label[R1_1to2]
 gallery_cam_1to1 = gallery_label[R1_1to1]
 gallery_cam_1to2 = gallery_label[R1_1to2]
 
-# For model 2 --> 1 (Query, Rank1 gallery in 2, Rank1 gellery in 1)
+# For model 2 --> 1 (Query, Rank1 gallery in 2, Rank1 gallery in 1)
 
-R1_q_2_path = query_path_list[R1_q_2]
-R1_q_2_label = query_label[R1_q_2]
-R1_q_2_cam = query_cam[R1_q_2]
+# R1_q_2_path = query_path_list[R1_q_2]
+# R1_q_2_label = query_label[R1_q_2]
+# R1_q_2_cam = query_cam[R1_q_2]
 
-gallery_path_2to1 = gallery_path_list[R1_2to1]
-gallery_path_2to2 = gallery_path_list[R1_2to2]
+# gallery_path_2to1 = gallery_path_list[R1_2to1]
+# gallery_path_2to2 = gallery_path_list[R1_2to2]
 
-gallery_label_2to1 = gallery_label[R1_2to1]
-gallery_label_2to2 = gallery_label[R1_2to2]
+# gallery_label_2to1 = gallery_label[R1_2to1]
+# gallery_label_2to2 = gallery_label[R1_2to2]
 
-gallery_cam_2to1 = gallery_cam[R1_2to1]
-gallery_cam_2to2 = gallery_cam[R1_2to2]
+# gallery_cam_2to1 = gallery_cam[R1_2to1]
+# gallery_cam_2to2 = gallery_cam[R1_2to2]
 
 num1 = len(R1_q_1_path)
-num2 = len(R1_q_2_path)
-
+# num2 = len(R1_q_2_path)
+print(f"Print {num1} Images (POS: True, Tri: False) ")
 # For INDEX 1
 fig1 = plt.figure(figsize=(5,num1)) #단위 인치
-fig1.suptitle(f'TEST_SIZE : {cfg.INPUT.SIZE_TEST}, METRIC: {cfg.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg.TEST.HEAD_FUSION}', fontsize=5) 
+fig1.suptitle(f'TEST_SIZE : {cfg_1.INPUT.SIZE_TEST}, METRIC: {cfg_1.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg_1.TEST.HEAD_FUSION}', fontsize=5) 
 for i in range(num1):
     query_path = (q_root +'/'+ R1_q_1_path[i]).rstrip()
     query_label_i = R1_q_1_label[i]
@@ -358,7 +370,7 @@ for i in range(num1):
 plt.subplots_adjust(wspace =0.02,hspace=0.3)
 result_img_path = f'result/result_visualize/R1_comparision/{INDEX1}&{INDEX2}'
 os.makedirs(result_img_path,exist_ok=True)
-fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparision_{cfg.TEST.HEAD_FUSION}_{cfg.TEST.DISCARD_RATIO}.png")
+fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparision_{cfg_1.TEST.HEAD_FUSION}_{cfg_1.TEST.DISCARD_RATIO}.png")
 
 # For INDEX 2
 

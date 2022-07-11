@@ -22,7 +22,7 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : True
+  REL_POS : False
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -32,10 +32,11 @@ INPUT:
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
+  
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
-  NAMES: ('cuhk03')
+  NAMES: ('occ_duke')
   ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
 
 DATALOADER:
@@ -65,11 +66,13 @@ SOLVER:
   COMB : True
   REPLACEMENT : True
   COMB_INDEX : 5
+  WARMUP_EPOCHS : 5
+  WARMUP_FACTOR : 0.01
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: './logs/market_vit_base_256_128/101/transformer_120_101.pth'
+  WEIGHT: './logs/Occ_vit_base_384_128/508/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : False
@@ -77,11 +80,11 @@ TEST:
   VISUALIZE_RANK : 10
   VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'mean'
+  HEAD_FUSION : 'max'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
-OUTPUT_DIR: './logs/cuhk03_vit_base_384_128'
-INDEX : 803
-WANDB : True
+OUTPUT_DIR: './logs/Occ_vit_base_384_128'
+INDEX : 508
+WANDB : False

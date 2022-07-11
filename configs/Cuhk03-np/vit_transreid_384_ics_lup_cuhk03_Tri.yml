@@ -11,7 +11,7 @@ MODEL:
   PRETRAIN_CHOICE: 'imagenet'
   PRETRAIN_HW_RATIO: 2
   PRETRAIN_PATH: './pretrain/vit_base_ics_cfs_lup.pth' 
-  METRIC_LOSS_TYPE: 'triplet_ss_pos_6'
+  METRIC_LOSS_TYPE: 'triplet'
   ID_LOSS_TYPE: 'softmax'
   IF_FEAT_CAT : False
   IF_LABELSMOOTH: 'off'
@@ -22,10 +22,7 @@ MODEL:
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
-  REL_POS : True
-  REL_CLS : False
-  REL_ABS : False
-  REL_CTX : False
+  REL_POS : False
   ABS_POS : True
   HEAD_NUM : 12
 
@@ -38,7 +35,7 @@ INPUT:
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
-  NAMES: ('market1501')
+  NAMES: ('cuhk03')
   ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
 
 DATALOADER:
@@ -61,33 +58,30 @@ SOLVER:
   WEIGHT_DECAY_BIAS: 1e-4
   BIAS_LR_FACTOR: 2
   PATCH_RATIO : [0.5,0.5]
-  LOSS_RATIO : 1.0
+  LOSS_RATIO : 0.5
   FEAT_NORM : False
   JSD : True
   HEAD_WISE : False
-  MEAN_POS : False
   COMB : True
   REPLACEMENT : True
-  COMB_INDEX : 10
-  WARMUP_EPOCHS : 5
-  WARMUP_FACTOR : 0.01
+  COMB_INDEX : 5
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: '/home/sungsu21/TransReID/TransReID/logs/market_vit_base_384_128/429/transformer_120.pth'
+  WEIGHT: './logs/cuhk03_vit_base_384_128/801/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : False
   VISUALIZE_INDEX : 777
   VISUALIZE_RANK : 10
-  VISUALIZE_TYPE : 1 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
+  VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'mean'
+  HEAD_FUSION : 'min'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
-  
-OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 436
-WANDB : True
+
+OUTPUT_DIR: './logs/cuhk03_vit_base_384_128'
+INDEX : 801
+WANDB : False

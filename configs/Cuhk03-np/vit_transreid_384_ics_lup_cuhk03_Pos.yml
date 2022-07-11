@@ -18,7 +18,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
@@ -32,11 +32,10 @@ INPUT:
   PROB: 0.5 # random horizontal flip
   RE_PROB: 0.5 # random erasing
   PADDING: 10
-  
   PIXEL_MEAN: [0.5, 0.5, 0.5]
   PIXEL_STD: [0.5, 0.5, 0.5]
 DATASETS:
-  NAMES: ('msmt17')
+  NAMES: ('cuhk03')
   ROOT_DIR: ('/home/sungsu21/TransReID/TransReID/dataset')
 
 DATALOADER:
@@ -50,7 +49,7 @@ SOLVER:
   MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
-  WARMUP_METHOD: 'cosine'
+  WARMUP_METHOD: 'linear'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 20
   LOG_PERIOD: 20
@@ -66,13 +65,11 @@ SOLVER:
   COMB : True
   REPLACEMENT : True
   COMB_INDEX : 5
-  WARMUP_EPOCHS : 20
-  WARMUP_FACTOR : 0.01
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
   RE_RANKING: False
-  WEIGHT: './logs/market_vit_base_256_128/101/transformer_120_101.pth'
+  WEIGHT: './logs/cuhk03_vit_base_384_128/802/transformer_120.pth'
   NECK_FEAT: 'before'
   FEAT_NORM: 'yes'
   VISUALIZE : False
@@ -80,11 +77,11 @@ TEST:
   VISUALIZE_RANK : 10
   VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'mean'
+  HEAD_FUSION : 'min'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
-OUTPUT_DIR: './logs/msmt17_vit_base_384_128'
-INDEX : 608
-WANDB : True
+OUTPUT_DIR: './logs/cuhk03_vit_base_384_128'
+INDEX : 802
+WANDB : False

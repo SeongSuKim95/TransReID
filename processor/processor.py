@@ -242,7 +242,6 @@ def do_inference(cfg,
     path = 'result/result_matrix'
     os.makedirs(path,exist_ok=True)
     scipy.io.savemat(f'{path}/{cfg.INDEX}.mat',result)    
-    
     if cfg.TEST.VISUALIZE :
         os.system(f'python -m processor.demo --config_file={args.config_file}')
     return cmc[0], cmc[4] # Rank 1, Rank 5

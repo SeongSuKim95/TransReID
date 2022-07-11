@@ -219,7 +219,7 @@ class Attention_relative(nn.Module):
     def forward(self, x, mask=None):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = qkv[0], qkv[1], qkv[2]   # make torchscript happy (cannotp use tensor as tuple)
 
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1)) 
