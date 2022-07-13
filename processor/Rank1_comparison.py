@@ -47,6 +47,12 @@ def imshow(path, title=None):
         plt.title(title)
     plt.pause(0.001)  # pause a bit so that plots are updated
 
+def imwrite(path, title=None):
+    """Imwrite for Tensor."""
+    
+    im = plt.imread(path)
+    cv2.imwrite(f"{idx}.jpg",im)
+    
 def axis_off(ax):
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)  
@@ -96,7 +102,10 @@ WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/802/t
 WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/801/transformer_120.pth'
 INDEX1 = '802'
 INDEX2 = '801'
+idx = 4
+data = cfg_1.DATASETS.NAMES
 dataset = __factory[cfg_1.DATASETS.NAMES](root=cfg_1.DATASETS.ROOT_DIR)
+
 
 model1 = make_model(cfg_1, num_class=dataset.num_train_pids, camera_num=dataset.num_train_cams, view_num = dataset.num_train_vids)
 model1.load_param(WEIGHT1)
@@ -293,84 +302,115 @@ gallery_cam_1to2 = gallery_label[R1_1to2]
 # gallery_cam_2to2 = gallery_cam[R1_2to2]
 
 num1 = len(R1_q_1_path)
+
 # num2 = len(R1_q_2_path)
 print(f"Print {num1} Images (POS: True, Tri: False) ")
+
 # For INDEX 1
 fig1 = plt.figure(figsize=(5,num1)) #단위 인치
 fig1.suptitle(f'TEST_SIZE : {cfg_1.INPUT.SIZE_TEST}, METRIC: {cfg_1.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg_1.TEST.HEAD_FUSION}', fontsize=5) 
 for i in range(num1):
-    query_path = (q_root +'/'+ R1_q_1_path[i]).rstrip()
-    query_label_i = R1_q_1_label[i]
-    query_cam_i = R1_q_1_cam[i]
+    if i == idx:
+        if data == 'msmt17':
+            query_path = (q_root.replace('list_query.txt','mask_test_v2/') + R1_q_1_path[i].split('_')[0] + '/' + R1_q_1_path[i]).rstrip()
+            query_label_i = R1_q_1_label[i]
+            query_cam_i = R1_q_1_cam[i]
+            gallery_path_1to1_i = (g_root.replace('list_gallery.txt','mask_test_v2/') +gallery_path_1to1[i].split('_')[0] + '/' + gallery_path_1to1[i]).rstrip()
+            gallery_label_1to1_i = gallery_label_1to1[i]
+            gallery_path_1to2_i = (g_root.replace('list_gallery.txt','mask_test_v2/') +gallery_path_1to2[i].split('_')[0] + '/' + gallery_path_1to2[i]).rstrip()
+            gallery_label_1to2_i = gallery_label_1to2[i]
+            print(f"{i}th image : {query_path}")
+        else :
+            query_path = (q_root +'/'+ R1_q_1_path[i]).rstrip()
+            query_label_i = R1_q_1_label[i]
+            query_cam_i = R1_q_1_cam[i]
 
-    gallery_path_1to1_i = (g_root + '/' + gallery_path_1to1[i]).rstrip()
-    gallery_label_1to1_i = gallery_label_1to1[i]
-    gallery_path_1to2_i = (g_root + '/' + gallery_path_1to2[i]).rstrip()
-    gallery_label_1to2_i = gallery_label_1to2[i]
-    print(f"{i}th image : {query_path}")
-    
-    # Query Image (Model 1 : True, Model2 : False)
-    query_ax = plt.subplot(num1,7,7*i+1) # row, col, index
-    # ax.get_xaxis().set_visible(False)
-    # ax.get_yaxis().set_visible(False)
-    axis_off(query_ax)
-    imshow(query_path)
-    if i == 0 :
-        plt.title('Query',fontsize=6)
-    
-    axis_set(query_ax, color="black",linewidth=1)
-    # ax.text(10,140,f"ID : {query_label_i}")
-    # ax.text(10,152,f"Cam : {query_cam_i}")
-    query_1to1 = Attention_map(query_path,model1)
-    query_1to2 = Attention_map(query_path,model2)
-    gallery_1to1 = Attention_map(gallery_path_1to1_i,model1)
-    gallery_1to2 = Attention_map(gallery_path_1to2_i,model2)
-    
-    # Attention map of Query for MODEL 1 
-    attn_ax1 = plt.subplot(num1,7,7*i+2)
-    axis_off(attn_ax1)
-    plt.imshow(query_1to1)
-    axis_set(attn_ax1, color="black",linewidth=1)
+            gallery_path_1to1_i = (g_root + '/' + gallery_path_1to1[i]).rstrip()
+            gallery_label_1to1_i = gallery_label_1to1[i]
+            gallery_path_1to2_i = (g_root + '/' + gallery_path_1to2[i]).rstrip()
+            gallery_label_1to2_i = gallery_label_1to2[i]
+            print(f"{i}th image : {query_path}")
 
-    # Rank1 Gallery Image for MODEL 1
-    gallery_ax = plt.subplot(num1,7,7*i+3)
-    axis_off(gallery_ax)
-    imshow(gallery_path_1to1_i)
-    axis_set(gallery_ax, color = "green", linewidth=1)
-    # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
-    plt.title(f'ID : {gallery_label_1to1_i}',fontsize = 6)
+        # Query Image (Model 1 : True, Model2 : False)
+        query_ax = plt.subplot(num1,7,7*i+1) # row, col, index
+        # ax.get_xaxis().set_visible(False)
+        # ax.get_yaxis().set_visible(False)
+        axis_off(query_ax)
+        imshow(query_path)
+        if i == 0 :
+            plt.title('Query',fontsize=6)
+        
+        axis_set(query_ax, color="black",linewidth=1)
+        # ax.text(10,140,f"ID : {query_label_i}")
+        # ax.text(10,152,f"Cam : {query_cam_i}")
+        query_1to1 = Attention_map(query_path,model1)
+        query_1to2 = Attention_map(query_path,model2)
+        gallery_1to1 = Attention_map(gallery_path_1to1_i,model1)
+        gallery_1to2 = Attention_map(gallery_path_1to2_i,model2)
+        
+        # Attention map of Query for MODEL 1 
+        attn_ax1 = plt.subplot(num1,7,7*i+2)
+        axis_off(attn_ax1)
+        plt.imshow(query_1to1)
+        axis_set(attn_ax1, color="black",linewidth=1)
 
-    # Attention map of Gallery Image for MODEL 1
-    attn_ax2 = plt.subplot(num1,7,7*i+4)
-    axis_off(attn_ax2)
-    plt.imshow(gallery_1to1)
-    axis_set(attn_ax2, color = "green", linewidth=1)
+        # Rank1 Gallery Image for MODEL 1
+        gallery_ax = plt.subplot(num1,7,7*i+3)
+        axis_off(gallery_ax)
+        imshow(gallery_path_1to1_i)
+        axis_set(gallery_ax, color = "green", linewidth=1)
+        # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
+        plt.title(f'ID : {gallery_label_1to1_i}',fontsize = 6)
 
-    # Attention map of Query for MODEL 2
-    attn_ax3 = plt.subplot(num1,7,7*i+5)
-    axis_off(attn_ax3)
-    plt.imshow(query_1to2)
-    axis_set(attn_ax3, color = "black", linewidth=1)
+        # Attention map of Gallery Image for MODEL 1
+        attn_ax2 = plt.subplot(num1,7,7*i+4)
+        axis_off(attn_ax2)
+        plt.imshow(gallery_1to1)
+        axis_set(attn_ax2, color = "green", linewidth=1)
+        # Attention map of Query for MODEL 2
 
-    # Rank 1 Gallery Image for MODEL 2
-    gallery_ax = plt.subplot(num1,7,7*i+6)
-    axis_off(gallery_ax)
-    axis_set(gallery_ax, color = "red", linewidth=1)
-    imshow(gallery_path_1to2_i)
-    # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
-    plt.title(f'ID : {gallery_label_1to2_i}',fontsize = 6)
-    
-    # Attention map of Gallery Image for MODEL 2
-    attn_ax4 = plt.subplot(num1,7,7*i+7)
-    axis_off(attn_ax4)
-    axis_set(attn_ax4, color = "red", linewidth=1)
-    plt.imshow(gallery_1to2)
+        attn_ax3 = plt.subplot(num1,7,7*i+5)
+        axis_off(attn_ax3)
+        plt.imshow(query_1to2)
+        axis_set(attn_ax3, color = "black", linewidth=1)
+
+        # Rank 1 Gallery Image for MODEL 2
+        gallery_ax = plt.subplot(num1,7,7*i+6)
+        axis_off(gallery_ax)
+        axis_set(gallery_ax, color = "red", linewidth=1)
+        imshow(gallery_path_1to2_i)
+        # gallery_ax.set_xlabel(f'ID:{gallery_label_1to1_i}')
+        plt.title(f'ID : {gallery_label_1to2_i}',fontsize = 6)
+
+        # Attention map of Gallery Image for MODEL 2
+        attn_ax4 = plt.subplot(num1,7,7*i+7)
+        axis_off(attn_ax4)
+        axis_set(attn_ax4, color = "red", linewidth=1)
+        plt.imshow(gallery_1to2)
+
+        # Sample Extraction
+        im = plt.imread(query_path)
+        print(query_path)
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query.jpg",cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+
+        im = plt.imread(gallery_path_1to1_i)
+        print(gallery_path_1to1_i)
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to1.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
+        
+        im = plt.imread(gallery_path_1to2_i)
+        print(gallery_path_1to2_i)
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to2.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
+        
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query_1to1.jpg",cv2.cvtColor(query_1to1, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to1.jpg",cv2.cvtColor(gallery_1to1, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to2.jpg",cv2.cvtColor(gallery_1to2, cv2.COLOR_RGB2BGR))
+
     # plt.title(f'{INDEX2}')
     
 plt.subplots_adjust(wspace =0.02,hspace=0.3)
-result_img_path = f'result/result_visualize/R1_comparision/{INDEX1}&{INDEX2}'
+result_img_path = f'result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}'
 os.makedirs(result_img_path,exist_ok=True)
-fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparision_{cfg_1.TEST.HEAD_FUSION}_{cfg_1.TEST.DISCARD_RATIO}.png")
+fig1.savefig(f"{result_img_path}/{INDEX1}&{INDEX2}_R1comparison_{cfg_1.TEST.HEAD_FUSION}_{cfg_1.TEST.DISCARD_RATIO}.png")
 
 # For INDEX 2
 

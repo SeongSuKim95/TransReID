@@ -18,7 +18,7 @@ MODEL:
   IF_WITH_CENTER: 'no'
   NAME: 'transformer'
   NO_MARGIN: True
-  DEVICE_ID: ('0')
+  DEVICE_ID: ('1')
   TRANSFORMER_TYPE: 'vit_base_patch16_224_TransReID_SSL'
   STRIDE_SIZE: [16, 16]
   STEM_CONV: True
@@ -50,7 +50,7 @@ SOLVER:
   MAX_EPOCHS: 120
   BASE_LR: 0.0004
   IMS_PER_BATCH: 64
-  WARMUP_METHOD: 'linear'
+  WARMUP_METHOD: 'cosine'
   LARGE_FC_LR: False
   CHECKPOINT_PERIOD: 20
   LOG_PERIOD: 20
@@ -65,11 +65,11 @@ SOLVER:
   HEAD_WISE : False
   COMB : True
   REPLACEMENT : True
-  COMB_INDEX : 5
-  WARMUP_EPOCHS : 5
+  COMB_INDEX : 10
+  WARMUP_EPOCHS : 20
   WARMUP_FACTOR : 0.01
 TEST:
-  EVAL: True
+  EVAL: False
   IMS_PER_BATCH: 256
   RE_RANKING: False
   WEIGHT: './logs/Occ_vit_base_384_128/507/transformer_120.pth'

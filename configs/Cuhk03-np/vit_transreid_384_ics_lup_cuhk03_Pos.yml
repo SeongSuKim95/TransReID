@@ -64,7 +64,7 @@ SOLVER:
   HEAD_WISE : False
   COMB : True
   REPLACEMENT : True
-  COMB_INDEX : 5
+  COMB_INDEX : 10
 TEST:
   EVAL: False
   IMS_PER_BATCH: 256
@@ -77,11 +77,11 @@ TEST:
   VISUALIZE_RANK : 10
   VISUALIZE_TYPE : 0 # 0 : Specific query index, 1: Max Error ID , 2: Max Distance Query 
   VISUALIZE_METRIC : 'Euclidean'
-  HEAD_FUSION : 'min'
+  HEAD_FUSION : 'max'
   DISCARD_RATIO : 0.9
   EVAL_METRIC : 'Euclidean'
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/cuhk03_vit_base_384_128'
 INDEX : 802
-WANDB : False
+WANDB : True
