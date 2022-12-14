@@ -83,5 +83,5 @@ TEST:
   EXPLAIN : False
 
 OUTPUT_DIR: './logs/DMTMC_vit_base_384_128'
-INDEX : 704
-WANDB : False
+INDEX : 30000
+WANDB : True

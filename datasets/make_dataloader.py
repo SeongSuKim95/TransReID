@@ -25,9 +25,7 @@ __factory = {
 } # Class Factory
 
 def train_collate_fn(batch):
-    """
-    # collate_fn这个函数的输入就是一个list，list的长度是一个batch size，list中的每个元素都是__getitem__得到的结果
-    """
+
     imgs, pids, camids, viewids , _ = zip(*batch)
     pids = torch.tensor(pids, dtype=torch.int64)
     viewids = torch.tensor(viewids, dtype=torch.int64)
@@ -63,6 +61,7 @@ def make_dataloader(cfg):
     dataset = __factory[cfg.DATASETS.NAMES](root=cfg.DATASETS.ROOT_DIR) # Make Dataset class with root directory
     
     train_set = ImageDataset(dataset.train, train_transforms) # ImageDataset class : DataLoader에 들어갈 instance 생성자 __len__, _getitem__ method 
+    
     # class ImageDataset(Dataset):
     #     def __init__(self, dataset, transform=None):
     #         self.dataset = dataset

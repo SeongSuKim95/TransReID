@@ -22,6 +22,8 @@ class RandomIdentitySampler(Sampler):  # For Single GPU training
         #{783: [0, 5, 116, 876, 1554, 2041],...,}
         for index, (_, pid, _, _) in enumerate(self.data_source):
             self.index_dic[pid].append(index) # pids : image index 형태의 dictionary로 저장
+        self.id_cnt = list(map(lambda x : len(x[1]),self.index_dic.items()))
+
         self.pids = list(self.index_dic.keys())  # pids list
 
         # estimate number of examples in an epoch

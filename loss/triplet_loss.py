@@ -1,5 +1,3 @@
-from re import A
-from tkinter import X
 import torch
 from torch import nn
 from typing import Optional, Tuple

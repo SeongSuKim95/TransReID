@@ -89,5 +89,5 @@ TEST:
   EXPLAIN : False
   
 OUTPUT_DIR: './logs/market_vit_base_384_128'
-INDEX : 408
-WANDB : False
+INDEX : 10000
+WANDB : True

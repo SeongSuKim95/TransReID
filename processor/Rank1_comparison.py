@@ -98,11 +98,12 @@ transform = T.Compose([
 ])
 
 os.environ['CUDA_VISIBLE_DEVICES'] = cfg_1.MODEL.DEVICE_ID
-WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/802/transformer_120.pth'
-WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/cuhk03_vit_base_384_128/801/transformer_120.pth'
-INDEX1 = '802'
-INDEX2 = '801'
-idx = 4
+WEIGHT1 = '/home/sungsu21/TransReID/TransReID/logs/Occ_vit_base_384_128/507/transformer_120.pth'
+WEIGHT2 = '/home/sungsu21/TransReID/TransReID/logs/Occ_vit_base_384_128/508/transformer_120.pth'
+INDEX1 = '507'
+INDEX2 = '508'
+idx = 62
+FF_flag = True
 data = cfg_1.DATASETS.NAMES
 dataset = __factory[cfg_1.DATASETS.NAMES](root=cfg_1.DATASETS.ROOT_DIR)
 
@@ -190,7 +191,7 @@ def sort_img_cos(dist_cos, index, ql, qc, gl, gc):
  
     return cos_index, cos_score
 
-def rank_1_idx(dist_mat1, dist_mat2, ql, qc, gl, gc):
+def rank_1_idx(dist_mat1, dist_mat2, ql, qc, gl, gc, FF_flag):
     
     query_length = dist_mat1.shape[0]
     query_ID = np.unique(ql)
@@ -230,22 +231,28 @@ def rank_1_idx(dist_mat1, dist_mat2, ql, qc, gl, gc):
 
         dist_rank_index_1[idx] = dist_index_idx1[0]
         dist_rank_index_2[idx] = dist_index_idx2[0]
-        if (gl[dist_rank_index_1[idx]] == ql[idx]) and (gl[dist_rank_index_2[idx]] != ql[idx]) : # Model 1에선 맞췄으나 Model 2 에서 틀린 경우
-            rank1_list_1[idx] = True
-        if (gl[dist_rank_index_2[idx]] == ql[idx]) and (gl[dist_rank_index_1[idx]] != ql[idx]) : # Model 2에선 맞췄으나 Model 1 에서 틀린 경우
-            rank1_list_2[idx] = True
-        
+        if not FF_flag:
+            if (gl[dist_rank_index_1[idx]] == ql[idx]) and (gl[dist_rank_index_2[idx]] != ql[idx]) : # Model 1에선 맞췄으나 Model 2 에서 틀린 경우
+                rank1_list_1[idx] = True
+            if (gl[dist_rank_index_2[idx]] == ql[idx]) and (gl[dist_rank_index_1[idx]] != ql[idx]) : # Model 2에선 맞췄으나 Model 1 에서 틀린 경우
+                rank1_list_2[idx] = True
+        else:
+            if (gl[dist_rank_index_1[idx]] != ql[idx]) and (gl[dist_rank_index_2[idx]] != ql[idx]) : # Model 1,Model 2 둘다 틀린 경우
+                rank1_list_1[idx] = True
         # dist_rank_score_1[idx] = dist_score_idx1[0]
         # dist_rank_score_2[idx] = dist_score_idx2[0]
-    
-    r1_list_1to1 = dist_rank_index_1[rank1_list_1]
-    r1_list_2to2 = dist_rank_index_2[rank1_list_2]
-    r1_list_1to2 = dist_rank_index_2[rank1_list_1]
-    r1_list_2to1 = dist_rank_index_1[rank1_list_2]    
+    if not FF_flag:
 
-    return rank1_list_1, rank1_list_2, r1_list_1to1, r1_list_2to2, r1_list_1to2, r1_list_2to1
+        r1_list_1to1 = dist_rank_index_1[rank1_list_1]
+        r1_list_2to2 = dist_rank_index_2[rank1_list_2]
+        r1_list_1to2 = dist_rank_index_2[rank1_list_1]
+        r1_list_2to1 = dist_rank_index_1[rank1_list_2]    
+        return rank1_list_1, rank1_list_2, r1_list_1to1, r1_list_2to2, r1_list_1to2, r1_list_2to1
 
-
+    else :
+        r1_list_1to1 = dist_rank_index_1[rank1_list_1]
+        r1_list_1to2 = dist_rank_index_2[rank1_list_1]
+        return rank1_list_1, None, r1_list_1to1, None, r1_list_1to2, None
 def Attention_map(img_path,model,cam_label=None):
     img = Image.open(img_path)
     img_input = img.resize(cfg_1.INPUT.SIZE_TEST)
@@ -269,7 +276,7 @@ def Attention_map(img_path,model,cam_label=None):
 #Visualize the rank result#
 ###########################
 
-R1_q_1,R1_q_2,R1_1to1,R1_2to2,R1_1to2,R1_2to1 = rank_1_idx(dist_eucd_1,dist_eucd_2,query_label,query_cam,gallery_label,gallery_cam)
+R1_q_1,R1_q_2,R1_1to1,R1_2to2,R1_1to2,R1_2to1 = rank_1_idx(dist_eucd_1,dist_eucd_2,query_label,query_cam,gallery_label,gallery_cam,FF_flag)
 
 # For model 1 --> 2 (Query, Rank1 gallery in 1, Rank1 gallery in 2)
 
@@ -310,7 +317,7 @@ print(f"Print {num1} Images (POS: True, Tri: False) ")
 fig1 = plt.figure(figsize=(5,num1)) #단위 인치
 fig1.suptitle(f'TEST_SIZE : {cfg_1.INPUT.SIZE_TEST}, METRIC: {cfg_1.TEST.VISUALIZE_METRIC}, ATTENTION_VISUALIZE : {cfg_1.TEST.HEAD_FUSION}', fontsize=5) 
 for i in range(num1):
-    if i == idx:
+    # if i == idx:
         if data == 'msmt17':
             query_path = (q_root.replace('list_query.txt','mask_test_v2/') + R1_q_1_path[i].split('_')[0] + '/' + R1_q_1_path[i]).rstrip()
             query_label_i = R1_q_1_label[i]
@@ -389,22 +396,25 @@ for i in range(num1):
         plt.imshow(gallery_1to2)
 
         # Sample Extraction
-        im = plt.imread(query_path)
-        print(query_path)
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query.jpg",cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
+        # im = plt.imread(query_path)
+        # print(query_path)
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query.jpg",cv2.cvtColor(im, cv2.COLOR_RGB2BGR))
 
-        im = plt.imread(gallery_path_1to1_i)
-        print(gallery_path_1to1_i)
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to1.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
+        # im = plt.imread(gallery_path_1to1_i)
+        # print(gallery_path_1to1_i)
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to1.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
         
-        im = plt.imread(gallery_path_1to2_i)
-        print(gallery_path_1to2_i)
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to2.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
+        # im = plt.imread(gallery_path_1to2_i)
+        # print(gallery_path_1to2_i)
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_path_1to2.jpg",cv2.cvtColor(im,cv2.COLOR_RGB2BGR))
         
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query_1to1.jpg",cv2.cvtColor(query_1to1, cv2.COLOR_RGB2BGR))
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to1.jpg",cv2.cvtColor(gallery_1to1, cv2.COLOR_RGB2BGR))
-        cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to2.jpg",cv2.cvtColor(gallery_1to2, cv2.COLOR_RGB2BGR))
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query_1to1.jpg",cv2.cvtColor(query_1to1, cv2.COLOR_RGB2BGR))
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_query_1to2.jpg",cv2.cvtColor(query_1to2, cv2.COLOR_RGB2BGR))
 
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to1.jpg",cv2.cvtColor(gallery_1to1, cv2.COLOR_RGB2BGR))
+        # cv2.imwrite(f"result/result_visualize/R1_comparison/{INDEX1}&{INDEX2}/{idx}_gallery_1to2.jpg",cv2.cvtColor(gallery_1to2, cv2.COLOR_RGB2BGR))
+        if i == 100 :
+            break
     # plt.title(f'{INDEX2}')
     
 plt.subplots_adjust(wspace =0.02,hspace=0.3)

@@ -78,8 +78,8 @@ def do_train(cfg,
                 score, feat = model(img, target, cam_label=target_cam, view_label=target_view)
                 # JPM을 사용할 경우
                 # score, feat의 개수는 JPM branch 개수와 같다
-                # score.size = [#JPM,bs,train_ID] [5,64,751]
-                # feat.size = [#JPM,bs,feat_size] [5,64,768]
+                # score.size = [#JPM,bs,train_ID]  [5,64,751]
+                # feat.size  = [#JPM,bs,feat_size] [5,64,768]
                 if 'pos' in triplet_type:
                     if REL_POS :
                         bias_index = model.base.blocks[-1].attn.state_dict()['relative_position_index']
